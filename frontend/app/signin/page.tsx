@@ -15,7 +15,9 @@ import {
   ShieldAlert
 } from "lucide-react";
 
-export default function SignInPage() {
+import { Suspense } from "react";
+
+function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const defaultType = searchParams.get("type") || "student";
@@ -257,5 +259,20 @@ export default function SignInPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-xl text-slate-700 font-medium">Loading...</p>
+        </div>
+      </div>
+    }>
+      <SignInForm />
+    </Suspense>
   );
 }
