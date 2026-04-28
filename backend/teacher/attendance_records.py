@@ -4,13 +4,15 @@ import io
 import base64
 import numpy as np
 from flask import Blueprint, request, jsonify, current_app
-from bson.objectid import ObjectId
+# Removed bson import for DynamoDB compatibility
 from datetime import datetime
 from PIL import Image
 from scipy.spatial.distance import cosine
 from deepface import DeepFace
 import logging
 import time
+from timetable import get_current_subject
+from bson.objectid import ObjectId
 
 logger = logging.getLogger(__name__)
 
@@ -37,51 +39,41 @@ def read_image_from_base64_optimized(image_b64: str, target_size=(640, 480)):
     
     return np.array(img)
 
-def detect_faces_optimized(rgb_image, detector):
-    """Detect faces using preloaded MTCNN detector"""
-    # Skip detection if image is too small
-    if rgb_image.shape[0] < 50 or rgb_image.shape[1] < 50:
-        return []
-    
-    detections = detector.detect_faces(rgb_image)
-    faces = []
-    
-    for d in detections:
-        if d["confidence"] > 0.85:  # Slightly lower threshold for better detection
-            x, y, w, h = d["box"]
-            x, y = max(0, x), max(0, y)
-            if w > 40 and h > 40:  # Lower minimum size for better detection
-                face_rgb = rgb_image[y:y+h, x:x+w]
-                faces.append({
-                    "box": (x, y, w, h), 
-                    "face": face_rgb, 
-                    "confidence": d["confidence"]
-                })
-    
-    return faces
-
-def extract_embedding_optimized(face_rgb):
-    """Extract embedding using preloaded DeepFace model"""
+def extract_faces_and_embeddings(rgb_image):
+    """Detect and extract embeddings using preloaded DeepFace model"""
     try:
-        if face_rgb.shape[0] < 40 or face_rgb.shape[1] < 40:
-            return None
+        if rgb_image.shape[0] < 40 or rgb_image.shape[1] < 40:
+            return []
             
-        # Resize face to standard size
-        face_pil = Image.fromarray(face_rgb.astype("uint8")).resize((160, 160))
-        face_array = np.array(face_pil)
-        
         # Use DeepFace with optimized parameters
-        rep = DeepFace.represent(
-            face_array, 
-            model_name="Facenet512", 
-            detector_backend="skip",
-            enforce_detection=False  # Skip additional detection for speed
+        reps = DeepFace.represent(
+            rgb_image, 
+            model_name="ArcFace", 
+            detector_backend="retinaface",
+            enforce_detection=True,
+            align=True
         )
-        return np.array(rep[0]["embedding"], dtype=np.float32)  # Use float32 for speed
+        
+        faces = []
+        for rep in reps:
+            # rep contains 'embedding' and 'facial_area' (x, y, w, h)
+            area = rep.get('facial_area', {})
+            x = area.get('x', 0)
+            y = area.get('y', 0)
+            w = area.get('w', 0)
+            h = area.get('h', 0)
+            
+            embedding = np.array(rep["embedding"], dtype=np.float32)
+            faces.append({
+                "box": (x, y, w, h),
+                "embedding": embedding,
+                "confidence": rep.get("face_confidence", 1.0)
+            })
+        return faces
         
     except Exception as e:
         logger.error(f"Embedding extraction error: {e}")
-        return None
+        return []
 
 def get_attendance_collection():
     """Get the attendance collection from app config"""
@@ -314,8 +306,6 @@ def mark_attendance_with_duplicate_prevention():
     if not model_manager or not model_manager.is_ready():
         return jsonify({"error": "Face recognition models not initialized"}), 503
     
-    detector = model_manager.get_detector()
-    
     data = request.get_json()
     session_id = data.get("session_id")
     image_b64 = data.get("image")
@@ -326,9 +316,9 @@ def mark_attendance_with_duplicate_prevention():
     try:
         # Use same image processing as demo
         rgb = read_image_from_base64_optimized(image_b64)
-        faces = detect_faces_optimized(rgb, detector)
+        faces_data = extract_faces_and_embeddings(rgb)
 
-        if len(faces) == 0:
+        if len(faces_data) == 0:
             return jsonify({"message": "No faces detected", "faces": []})
 
         # Validate session
@@ -347,17 +337,17 @@ def mark_attendance_with_duplicate_prevention():
         
         logger.info(f"Session {session_id} already has {len(already_present_students)} students marked present")
 
-        # Recognition logic (same as demo session)
+        # Recognition logic
         db = current_app.config.get("DB")
         students_col = db.students
         threshold = float(current_app.config.get("THRESHOLD", 0.6))
         
-        # Search ALL students (same as demo session)
+        # Search ALL students
         students = list(students_col.find({"embeddings": {"$exists": True, "$ne": None}}))
         results = []
 
-        for f in faces:
-            emb = extract_embedding_optimized(f["face"])
+        for f in faces_data:
+            emb = f["embedding"]
             if emb is None:
                 results.append({
                     "match": None, 
@@ -479,83 +469,6 @@ def mark_attendance_with_duplicate_prevention():
         logger.error(f"Attendance error: {e}")
         return jsonify({"error": str(e)}), 500
 
-    """Finalize an attendance session with enhanced logging"""
-    data = request.get_json()
-    session_id = data.get("session_id")
-    if not session_id:
-        return jsonify({"error": "Missing session_id"}), 400
-
-    try:
-        collection = get_attendance_collection()
-        db = current_app.config.get("DB")
-        students_col = db.students
-
-        session_doc = collection.find_one({"_id": ObjectId(session_id)})
-        if not session_doc:
-            return jsonify({"error": "Session not found"}), 404
-
-        # Build set of present student ids
-        present_students = set(
-            s.get("student_id") for s in session_doc.get("students", []) 
-            if s.get("present")
-        )
-
-        # Get all students in that class
-        student_filter = {}
-        if session_doc.get("department"): student_filter["department"] = session_doc.get("department")
-        if session_doc.get("year"): student_filter["year"] = session_doc.get("year")
-        if session_doc.get("division"): student_filter["division"] = session_doc.get("division")
-
-        all_students = list(students_col.find(student_filter)) if student_filter else []
-        
-        # Mark absent students
-        absent_count = 0
-        for s in all_students:
-            sid = s.get("studentId") or s.get("student_id")
-            sname = s.get("studentName") or s.get("student_name")
-            
-            if sid not in present_students:
-                # Update existing entry or create new absent entry
-                updated = collection.update_one(
-                    {"_id": ObjectId(session_id), "students.student_id": sid},
-                    {"$set": {"students.$.present": False, "students.$.marked_at": None}}
-                )
-                
-                if updated.matched_count == 0:
-                    # No existing entry, add new absent entry
-                    collection.update_one(
-                        {"_id": ObjectId(session_id)},
-                        {"$push": {
-                            "students": {
-                                "student_id": sid, 
-                                "student_name": sname, 
-                                "present": False, 
-                                "marked_at": None
-                            }
-                        }}
-                    )
-                absent_count += 1
-
-        # Mark session as finalized
-        collection.update_one(
-            {"_id": ObjectId(session_id)}, 
-            {"$set": {"finalized": True, "ended_at": datetime.now()}}
-        )
-
-        logger.info(f"Session finalized: {len(present_students)} present, {absent_count} absent")
-
-        return jsonify({
-            "success": True,
-            "statistics": {
-                "present_count": len(present_students),
-                "absent_count": absent_count,
-                "total_students": len(all_students)
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"Error ending session: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
 
 # Health check for attendance models
 @attendance_session_bp.route("/models/status", methods=["GET"])
@@ -579,3 +492,170 @@ def attendance_model_status():
         },
         "timestamp": time.time()
     })
+
+@attendance_session_bp.route("/auto-mark", methods=["POST"])
+def auto_mark_attendance():
+    """Automated attendance marking using timetable Kiosk mode"""
+    start_time = time.time()
+    
+    # 1. Determine current subject from timetable
+    current_subject = get_current_subject()
+    if not current_subject:
+        return jsonify({"message": "No class currently scheduled", "faces": []})
+        
+    model_manager = current_app.config.get("MODEL_MANAGER")
+    if not model_manager or not model_manager.is_ready():
+        return jsonify({"error": "Face recognition models not initialized"}), 503
+        
+    data = request.get_json()
+    image_b64 = data.get("image")
+    if not image_b64:
+        return jsonify({"error": "Missing image"}), 400
+        
+    try:
+        # 2. Extract faces
+        rgb = read_image_from_base64_optimized(image_b64)
+        faces_data = extract_faces_and_embeddings(rgb)
+
+        if len(faces_data) == 0:
+            return jsonify({"message": "No faces detected", "subject": current_subject, "faces": []})
+
+        collection = get_attendance_collection()
+        db = current_app.config.get("DB")
+        students_col = db.students
+        
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        
+        # 3. Get or Create Session for current subject
+        # Defaulting to VI Semester AI & DS for now as requested
+        session_filter = {
+            "date": date_str,
+            "subject": current_subject,
+            "department": "AI & DS",
+            "year": "3" # VI Semester
+        }
+        
+        session_doc = collection.find_one(session_filter)
+        
+        if not session_doc:
+            # Create session automatically
+            session_doc = {
+                "date": date_str,
+                "subject": current_subject,
+                "department": "AI & DS",
+                "year": "3",
+                "division": "A", # Default division
+                "created_at": datetime.now(),
+                "finalized": False,
+                "ended_at": None,
+                "students": []
+            }
+            
+            # Prepopulate
+            class_students = list(students_col.find({
+                "department": "AI & DS",
+                "year": "3"
+            }))
+            
+            for s in class_students:
+                sid = s.get("studentId") or s.get("student_id")
+                name = s.get("studentName") or s.get("student_name")
+                session_doc["students"].append({
+                    "student_id": sid,
+                    "student_name": name,
+                    "present": False,
+                    "marked_at": None
+                })
+                
+            session_id = str(collection.insert_one(session_doc).inserted_id)
+            session_doc["_id"] = ObjectId(session_id)
+            logger.info(f"Auto-created session {session_id} for {current_subject}")
+        else:
+            session_id = str(session_doc["_id"])
+            if session_doc.get("finalized"):
+                return jsonify({"error": "Current session already finalized", "subject": current_subject}), 400
+
+        # 4. Recognize and Mark Present
+        already_present_students = set(
+            s.get("student_id") for s in session_doc.get("students", []) if s.get("present")
+        )
+        
+        threshold = float(current_app.config.get("THRESHOLD", 0.6))
+        students = list(students_col.find({"embeddings": {"$exists": True, "$ne": None}}))
+        results = []
+        
+        for f in faces_data:
+            emb = f["embedding"]
+            if emb is None: continue
+            
+            best, min_d = None, float("inf")
+            for student in students:
+                stored_embeddings = student.get("embeddings", [])
+                if not stored_embeddings: continue
+                
+                if isinstance(stored_embeddings, list) and len(stored_embeddings) > 0:
+                    avg_embedding = np.mean(stored_embeddings, axis=0)
+                else:
+                    avg_embedding = np.array(stored_embeddings)
+                
+                d = cosine(emb, avg_embedding)
+                if d < min_d:
+                    min_d = d
+                    best = student
+
+            if min_d < threshold and best:
+                student_id = best.get("studentId")
+                student_name = best.get("studentName")
+
+                if student_id in already_present_students:
+                    results.append({
+                        "match": {"user_id": student_id, "name": student_name},
+                        "status": "duplicate",
+                        "message": f"{student_name} already present"
+                    })
+                    continue
+
+                # Mark attendance
+                updated = collection.update_one(
+                    {"_id": ObjectId(session_id), "students.student_id": student_id, "students.present": False},
+                    {"$set": {"students.$.present": True, "students.$.marked_at": datetime.now()}}
+                )
+
+                if updated.matched_count > 0 and updated.modified_count > 0:
+                    already_present_students.add(student_id)
+                    results.append({
+                        "match": {"user_id": student_id, "name": student_name},
+                        "status": "marked_present",
+                        "message": f"Marked {student_name} present for {current_subject}"
+                    })
+                else:
+                    # Append new if not existed
+                    collection.update_one(
+                        {"_id": ObjectId(session_id)},
+                        {"$push": {"students": {
+                            "student_id": student_id,
+                            "student_name": student_name,
+                            "present": True,
+                            "marked_at": datetime.now()
+                        }}}
+                    )
+                    already_present_students.add(student_id)
+                    results.append({
+                        "match": {"user_id": student_id, "name": student_name},
+                        "status": "marked_present_new",
+                        "message": f"Added {student_name} to {current_subject}"
+                    })
+            else:
+                results.append({"status": "no_match", "message": "Face not recognized"})
+
+        return jsonify({
+            "message": "Auto-recognition processed",
+            "subject": current_subject,
+            "session_id": session_id,
+            "faces": results,
+            "processing_time": round(time.time() - start_time, 3)
+        })
+
+    except Exception as e:
+        logger.error(f"Auto-mark error: {e}")
+        return jsonify({"error": str(e)}), 500

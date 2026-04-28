@@ -156,6 +156,23 @@ export default function StudentRegistrationForm() {
     return null;
   }
 
+  if (isAuthed === true && userType !== "teacher") {
+    return (
+      <div className="flex items-center justify-center w-full h-screen bg-slate-50">
+        <div className="text-center bg-white p-8 rounded-xl shadow-xl border-2 border-red-200">
+          <h2 className="text-2xl text-red-600 font-bold mb-4">Access Denied</h2>
+          <p className="text-slate-600 mb-6">Only teachers can register new students.</p>
+          <button 
+            onClick={() => router.push(dashboardPath)}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 relative overflow-hidden">
       {/* Animated background elements */}

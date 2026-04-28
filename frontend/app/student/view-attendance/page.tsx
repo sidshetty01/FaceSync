@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 // XLSX is dynamically imported in the browser-only export function to avoid
 // bundling issues on the server (e.g. "fs" not found). Do not import at module top-level.
@@ -32,6 +32,12 @@ export default function ViewAttendance() {
     attendanceRate: 0,
   });
   const [searched, setSearched] = useState(false);
+  const [userType, setUserType] = useState("student");
+  const [localStudentId, setLocalStudentId] = useState("");
+  useEffect(() => {
+    setUserType(localStorage.getItem("userType") || "student");
+    setLocalStudentId(localStorage.getItem("studentId") || "");
+  }, []);
 
   const fetchAttendanceData = async () => {
     if (!selectedDate && !filterDepartment) {
@@ -46,7 +52,12 @@ export default function ViewAttendance() {
       if (filterYear) params.set("year", filterYear);
       if (filterDivision) params.set("division", filterDivision);
       if (filterSubject) params.set("subject", filterSubject);
-      if (filterStudentId) params.set("student_id", filterStudentId);
+      
+      if (userType === "student") {
+        params.set("student_id", localStudentId);
+      } else if (filterStudentId) {
+        params.set("student_id", filterStudentId);
+      }
 
       const res = await fetch(`http://127.0.0.1:5000/api/attendance?${params.toString()}`);
       const raw = await res.text();
@@ -87,6 +98,12 @@ export default function ViewAttendance() {
       if (filterYear) params.set("year", filterYear);
       if (filterDivision) params.set("division", filterDivision);
       if (filterSubject) params.set("subject", filterSubject);
+
+      if (userType === "student") {
+        params.set("student_id", localStudentId);
+      } else if (filterStudentId) {
+        params.set("student_id", filterStudentId);
+      }
 
       const res = await fetch(`http://127.0.0.1:5000/api/attendance/export?${params.toString()}`);
       const raw = await res.text();
@@ -176,15 +193,17 @@ export default function ViewAttendance() {
                   className="border border-gray-300 px-3 py-2 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
-                <input
-                  value={filterStudentId}
-                  onChange={(e) => setFilterStudentId(e.target.value)}
-                  placeholder="Student Id"
-                  className="border border-gray-300 px-3 py-2 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+              {userType === "teacher" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
+                  <input
+                    value={filterStudentId}
+                    onChange={(e) => setFilterStudentId(e.target.value)}
+                    placeholder="Student Id"
+                    className="border border-gray-300 px-3 py-2 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
                 <select

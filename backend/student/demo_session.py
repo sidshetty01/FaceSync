@@ -24,48 +24,41 @@ def read_image_from_bytes_optimized(b, target_size=(640, 480)):
 
     return np.array(img)
 
-def detect_faces_rgb_optimized(rgb_image, detector):
-    """Optimized face detection using preloaded MTCNN detector"""
-    # Skip detection if image is too small
-    if rgb_image.shape[0] < 50 or rgb_image.shape[1] < 50:
-        return []
-
-    detections = detector.detect_faces(rgb_image)
-    faces = []
-
-    for d in detections:
-        if d["confidence"] > 0.85:  # Slightly lower threshold for speed
-            x, y, w, h = d["box"]
-            x, y = max(0, x), max(0, y)
-            if w > 40 and h > 40:  # Filter small faces
-                face_rgb = rgb_image[y:y+h, x:x+w]
-                faces.append({
-                    "box": (x, y, w, h), 
-                    "face": face_rgb, 
-                    "confidence": d["confidence"]
-                })
-
-    return faces
-
-def extract_embedding_optimized(face_rgb):
-    """Optimized embedding extraction using preloaded model"""
+def extract_faces_and_embeddings(rgb_image):
+    """Detect and extract embeddings using preloaded DeepFace model"""
     try:
-        # Resize face to standard size
-        face_pil = Image.fromarray(face_rgb.astype("uint8")).resize((160, 160))
-        face_array = np.array(face_pil)
-
+        if rgb_image.shape[0] < 40 or rgb_image.shape[1] < 40:
+            return []
+            
         # Use DeepFace with optimized parameters
-        rep = DeepFace.represent(
-            face_array, 
-            model_name="Facenet512", 
-            detector_backend="skip",
-            enforce_detection=False  # Skip additional detection
+        reps = DeepFace.represent(
+            rgb_image, 
+            model_name="ArcFace", 
+            detector_backend="retinaface",
+            enforce_detection=True,
+            align=True
         )
-        return np.array(rep[0]["embedding"], dtype=np.float32)  # Use float32 for speed
-
+        
+        faces = []
+        for rep in reps:
+            # rep contains 'embedding' and 'facial_area' (x, y, w, h)
+            area = rep.get('facial_area', {})
+            x = area.get('x', 0)
+            y = area.get('y', 0)
+            w = area.get('w', 0)
+            h = area.get('h', 0)
+            
+            embedding = np.array(rep["embedding"], dtype=np.float32)
+            faces.append({
+                "box": (x, y, w, h),
+                "embedding": embedding,
+                "confidence": rep.get("face_confidence", 1.0)
+            })
+        return faces
+        
     except Exception as e:
         logger.error(f"Embedding extraction error: {e}")
-        return None
+        return []
 
 # In-memory cache for student embeddings (optional optimization)
 class EmbeddingCache:
@@ -147,9 +140,6 @@ def demo_recognize_optimized():
             "error": "Face recognition models not initialized"
         }), 503
 
-    # Get preloaded detector
-    detector = model_manager.get_detector()
-
     data = request.get_json()
     db = current_app.config.get("DB")
     students_col = db.students
@@ -168,10 +158,10 @@ def demo_recognize_optimized():
 
     # Face detection with timing
     detection_start = time.time()
-    faces = detect_faces_rgb_optimized(rgb, detector)
+    faces_data = extract_faces_and_embeddings(rgb)
     detection_time = time.time() - detection_start
 
-    if len(faces) == 0:
+    if len(faces_data) == 0:
         return jsonify({
             "success": True, 
             "faces": [],
@@ -182,9 +172,9 @@ def demo_recognize_optimized():
     results = []
 
     # Process each detected face
-    for f in faces:
+    for f in faces_data:
         embedding_start = time.time()
-        emb = extract_embedding_optimized(f["face"])
+        emb = f["embedding"]
         embedding_time = time.time() - embedding_start
 
         if emb is None:

@@ -98,6 +98,15 @@ export default function TeacherDashboard() {
       color: "from-amber-500 to-orange-500",
       bgColor: "bg-amber-50 hover:bg-amber-100",
       borderColor: "border-amber-200 hover:border-amber-300"
+    },
+    {
+      title: "Auto Scan (Kiosk)",
+      description: "Continuous automated scanning mode based on timetable",
+      icon: <Camera className="w-7 h-7" />,
+      path: "/teacher/auto-scan",
+      color: "from-rose-500 to-red-600",
+      bgColor: "bg-rose-50 hover:bg-rose-100",
+      borderColor: "border-rose-200 hover:border-rose-300"
     }
   ];
 

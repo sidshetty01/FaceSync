@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from bson import ObjectId
+# Removed bson import
 import time
 
 student_update_bp = Blueprint("student_update", __name__)

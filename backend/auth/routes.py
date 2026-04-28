@@ -109,7 +109,7 @@ def api_signin():
 
     # Prepare response based on user type
     user_info = {
-        "_id": str(user['_id']),
+        "_id": str(user.get('id') or user.get('email') or user.get('username')),
         "username": user['username'],
         "email": user['email'],
         "userType": user_type,
@@ -175,7 +175,7 @@ def get_user_profile():
     if not user:
         return jsonify({"success": False, "error": "User not found"}), 404
     
-    user['_id'] = str(user['_id'])
+    user['_id'] = str(user.get('id') or user.get('email') or user.get('username'))
     
     return jsonify({
         "success": True,
@@ -211,7 +211,7 @@ def switch_user_role():
     
     # Return user info for the target role
     user_info = {
-        "_id": str(target_user['_id']),
+        "_id": str(target_user.get('id') or target_user.get('email') or target_user.get('username')),
         "username": target_user['username'],
         "email": target_user['email'],
         "userType": target_type

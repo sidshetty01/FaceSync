@@ -1,8 +1,9 @@
 flask
 flask-cors
-pymongo
+boto3
 deepface
-mtcnn
+tf-keras
+retina-face
 numpy
 opencv-python-headless
 scipy

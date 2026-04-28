@@ -1,44 +1,32 @@
+from PIL import Image
+import io
+from deepface import DeepFace
+from db_helper import DynamoDBWrapper
+import logging
 from flask import Blueprint, request, jsonify, current_app
 import time
 import base64
 import numpy as np
-from PIL import Image
-import io
-from deepface import DeepFace
-from mtcnn import MTCNN
-from pymongo import MongoClient
-from bson.objectid import ObjectId
-import logging
 
 student_registration_bp = Blueprint("student_registration", __name__)
-client = MongoClient("MONGODB_URI")
-db = client["DATABASE_NAME"]
-students_collection = db["students"]
-detector = MTCNN()
 logger = logging.getLogger(__name__)
 
 def read_image_from_bytes(b):
     img = Image.open(io.BytesIO(b)).convert('RGB')
     return np.array(img)
-
-def detect_faces_rgb(rgb_image):
-    detections = detector.detect_faces(rgb_image)
-    faces = []
-    for d in detections:
-        if d['confidence'] > 0.9:
-            x, y, w, h = d['box']
-            x, y = max(0, x), max(0, y)
-            if w > 50 and h > 50:
-                face_rgb = rgb_image[y:y+h, x:x+w]
-                faces.append({'box': (x, y, w, h), 'face': face_rgb, 'confidence': d['confidence']})
-    return faces
-
 def extract_embedding(face_rgb):
     try:
-        face_pil = Image.fromarray(face_rgb.astype('uint8')).resize((160, 160))
-        face_array = np.array(face_pil)
-        rep = DeepFace.represent(face_array, model_name='Facenet512', detector_backend='skip')
-        return np.array(rep[0]['embedding'], dtype=float)
+        # face_rgb is a numpy array. DeepFace can handle numpy arrays directly.
+        rep = DeepFace.represent(
+            face_rgb, 
+            model_name='ArcFace', 
+            detector_backend='retinaface',
+            enforce_detection=True,
+            align=True
+        )
+        if len(rep) > 0:
+            return np.array(rep[0]['embedding'], dtype=float)
+        return None
     except Exception as e:
         print(f"Embedding error: {e}")
         return None
@@ -80,11 +68,7 @@ def register_student():
         except Exception:
             return jsonify({"success": False, "error": f"Invalid image data at index {idx}"}), 400
 
-        faces = detect_faces_rgb(rgb)
-        if len(faces) != 1:
-            return jsonify({"success": False, "error": f"Ensure exactly one face in each image (failed at image {idx+1})"}), 400
-
-        emb = extract_embedding(faces[0]['face'])
+        emb = extract_embedding(rgb)
         if emb is None:
             return jsonify({"success": False, "error": f"Failed to extract face features for image {idx+1}"}), 500
         embeddings.append(emb.tolist())

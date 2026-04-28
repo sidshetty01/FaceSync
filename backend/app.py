@@ -3,41 +3,21 @@ import os
 import time
 import logging
 import threading
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
-from pymongo import MongoClient
 from dotenv import load_dotenv
 from flask_bcrypt import Bcrypt
 import numpy as np
+from db_helper import DynamoDBWrapper
 
 # Blueprint imports
 from auth.routes import auth_bp
 
-# Optional student/teacher blueprints
-try:
-    from student.registration import student_registration_bp
-except ImportError:
-    student_registration_bp = None
-
-try:
-    from student.updatedetails import student_update_bp
-except ImportError:
-    student_update_bp = None
-
-try:
-    from student.demo_session import demo_session_bp
-except ImportError:
-    demo_session_bp = None
-
-try:
-    from student.view_attendance import attendance_bp
-except ImportError:
-    attendance_bp = None
-
-try:
-    from teacher.attendance_records import attendance_session_bp
-except ImportError:
-    attendance_session_bp = None
+from student.registration import student_registration_bp
+from student.updatedetails import student_update_bp
+from student.demo_session import demo_session_bp
+from student.view_attendance import attendance_bp
+from teacher.attendance_records import attendance_session_bp
 
 # Logging setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -45,17 +25,10 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-# MongoDB setup
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
-DB_NAME = os.getenv("DATABASE_NAME", "facerecognition")
-COLLECTION_NAME = os.getenv("COLLECTION_NAME", "students")
-THRESHOLD = float(os.getenv("THRESHOLD", "0.6"))
-
-client = MongoClient(MONGODB_URI)
-db = client[DB_NAME]
-students_collection = db[COLLECTION_NAME]
-attendance_db = client["facerecognition_db"]
-attendance_collection = attendance_db["attendance_records"]
+# DynamoDB setup instead of MongoDB
+db = DynamoDBWrapper()
+attendance_collection = db.attendance_records
+students_collection = db.students
 
 # OPTIMIZED MODEL MANAGER CLASS
 class ModelManager:
@@ -80,19 +53,11 @@ class ModelManager:
         start_time = time.time()
 
         self.models_ready = False
-        self.detector = None
         self.deepface_ready = False
 
         try:
-            # 1. Initialize MTCNN detector with optimized parameters
-            from mtcnn import MTCNN
-            logger.info("Loading MTCNN detector...")
-            self.detector = MTCNN()
-            logger.info("✅ MTCNN detector loaded successfully")
-
-            # 2. Preload DeepFace model properly
             from deepface import DeepFace
-            logger.info("Warming up DeepFace Facenet512 model...")
+            logger.info("Warming up DeepFace ArcFace model with retinaface detector...")
 
             # Force model download and initialization with dummy prediction
             dummy_img = np.zeros((160, 160, 3), dtype=np.uint8)
@@ -100,24 +65,15 @@ class ModelManager:
             # This forces the model to be downloaded and cached
             _ = DeepFace.represent(
                 dummy_img, 
-                model_name='Facenet512', 
-                detector_backend='skip',
-                enforce_detection=False
-            )
-
-            # Additional warm-up with different image size
-            dummy_img_2 = np.ones((224, 224, 3), dtype=np.uint8) * 128
-            _ = DeepFace.represent(
-                dummy_img_2, 
-                model_name='Facenet512', 
-                detector_backend='skip',
-                enforce_detection=False
+                model_name='ArcFace', 
+                detector_backend='retinaface',
+                enforce_detection=False,
+                align=True
             )
 
             self.deepface_ready = True
-            logger.info("✅ DeepFace Facenet512 model warmed up successfully")
-
             self.models_ready = True
+            logger.info("✅ DeepFace ArcFace & retinaface warmed up successfully")
 
             initialization_time = time.time() - start_time
             logger.info(f"🎉 All models initialized successfully in {initialization_time:.2f} seconds")
@@ -126,12 +82,6 @@ class ModelManager:
             logger.error(f"❌ Model initialization failed: {e}")
             self.models_ready = False
             raise e
-
-    def get_detector(self):
-        """Get the MTCNN detector instance"""
-        if not self.models_ready:
-            raise RuntimeError("Models not properly initialized")
-        return self.detector
 
     def is_ready(self):
         """Check if all models are ready"""
@@ -143,18 +93,15 @@ class ModelManager:
             if not self.models_ready:
                 return False
 
-            # Test MTCNN
-            test_img = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
-            _ = self.detector.detect_faces(test_img)
-
             # Test DeepFace
             from deepface import DeepFace
             test_face = np.random.randint(0, 255, (160, 160, 3), dtype=np.uint8)
             _ = DeepFace.represent(
                 test_face, 
-                model_name='Facenet512', 
-                detector_backend='skip',
-                enforce_detection=False
+                model_name='ArcFace', 
+                detector_backend='retinaface',
+                enforce_detection=False,
+                align=True
             )
 
             return True
@@ -169,17 +116,24 @@ model_manager = ModelManager()
 
 # Flask app
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {
+    "origins": "*",
+    "methods": ["GET", "POST", "OPTIONS"],
+    "allow_headers": ["Content-Type", "Authorization", "X-User-Email", "X-User-Type"]
+}})
+
+@app.before_request
+def log_request_info():
+    logger.info(f"Incoming Request: {request.method} {request.url}")
+    if request.is_json:
+        logger.info(f"Body: {request.get_json()}")
 
 # Configure Flask app with database and model instances
 app.config["DB"] = db
-app.config["COLLECTION_NAME"] = COLLECTION_NAME
-app.config["THRESHOLD"] = THRESHOLD
+app.config["THRESHOLD"] = 0.6
 app.config["ATTENDANCE_COLLECTION"] = attendance_collection
 
-# CRITICAL: Pass model manager to Flask config so blueprints can access it
 app.config["MODEL_MANAGER"] = model_manager
-app.config["MTCNN_DETECTOR"] = model_manager.get_detector()
 
 bcrypt = Bcrypt(app)
 
@@ -200,25 +154,11 @@ def health_check():
 # Register blueprints
 app.register_blueprint(auth_bp)
 
-if student_registration_bp:
-    app.register_blueprint(student_registration_bp)
-    logger.info("✅ Student registration blueprint registered")
-
-if student_update_bp:
-    app.register_blueprint(student_update_bp)
-    logger.info("✅ Student update blueprint registered")
-
-if demo_session_bp:
-    app.register_blueprint(demo_session_bp)
-    logger.info("✅ Demo session blueprint registered")
-
-if attendance_bp:
-    app.register_blueprint(attendance_bp)
-    logger.info("✅ Attendance blueprint registered")
-
-if attendance_session_bp:
-    app.register_blueprint(attendance_session_bp)
-    logger.info("✅ Attendance session blueprint registered")
+app.register_blueprint(student_registration_bp)
+app.register_blueprint(student_update_bp)
+app.register_blueprint(demo_session_bp)
+app.register_blueprint(attendance_bp)
+app.register_blueprint(attendance_session_bp)
 
 # List all registered routes
 logger.info("\nRegistered Flask Routes:")
