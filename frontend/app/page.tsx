@@ -1,122 +1,88 @@
-import HeroSection from '@/app/components/HeroSection';
-import FeaturesSection from "@/app/components/FeatureSection";
-import TestimonialsSection from "@/app/components/TestimonialsSection";
-import PricingSection from "@/app/components/PricingSection";
-import HowItWorksSection from "@/app/components/WorkSection";
-import AboutSection from "@/app/components/AboutSection";
-import ContactSection from "@/app/components/ContactSection";
-import Footer from "@/app/components/Footer";
 import Link from "next/link";
+import { UserCheck, LogIn, ShieldAlert } from "lucide-react";
 
 export default function HomePage() {
   return (
-    <main className="bg-gradient-to-br from-slate-50 via-white to-blue-50 min-h-screen overflow-hidden">
-      {/* Modern Navigation Bar */}
-      <nav className="bg-white/90 backdrop-blur-xl border-b border-slate-200/60 shadow-lg sticky top-0 z-50 transition-all duration-300">
-        <div className="flex justify-between items-center max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-lg">F</span>
-            </div>
-            <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              FaceRecSys
-            </div>
-          </div>
-          
-          <div className="hidden lg:flex space-x-8">
-            <a href="#features" className="text-slate-700 hover:text-blue-600 transition-all duration-300 font-medium hover:scale-105 relative group">
-              Features
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-600 transition-all duration-300 group-hover:w-full"></span>
-            </a>
-            <a href="#testimonials" className="text-slate-700 hover:text-blue-600 transition-all duration-300 font-medium hover:scale-105 relative group">
-              Testimonials
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-600 transition-all duration-300 group-hover:w-full"></span>
-            </a>
-            <a href="#pricing" className="text-slate-700 hover:text-blue-600 transition-all duration-300 font-medium hover:scale-105 relative group">
-              Pricing
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-600 transition-all duration-300 group-hover:w-full"></span>
-            </a>
-            <a href="#how-it-works" className="text-slate-700 hover:text-blue-600 transition-all duration-300 font-medium hover:scale-105 relative group">
-              How It Works
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-600 transition-all duration-300 group-hover:w-full"></span>
-            </a>
-            <a href="#about" className="text-slate-700 hover:text-blue-600 transition-all duration-300 font-medium hover:scale-105 relative group">
-              About
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-600 transition-all duration-300 group-hover:w-full"></span>
-            </a>
-            <a href="#contact" className="text-slate-700 hover:text-blue-600 transition-all duration-300 font-medium hover:scale-105 relative group">
-              Contact
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-600 transition-all duration-300 group-hover:w-full"></span>
-            </a>
-          </div>
-          
-          <div className="flex space-x-3">
-            <Link
-              href="/signin"
-              className="px-6 py-2.5 text-blue-600 font-semibold rounded-xl hover:bg-blue-50 transition-all duration-300 border-2 border-blue-200 hover:border-blue-300 hover:scale-105 hover:shadow-lg"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/signup"
-              className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105 hover:-translate-y-0.5"
-            >
-              Get Started
-            </Link>
-          </div>
-        </div>
+    <main className="bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 min-h-screen flex flex-col relative overflow-hidden text-white">
+      {/* Abstract Background Shapes */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 opacity-20">
+        <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] rounded-full bg-blue-500 blur-[100px]" />
+        <div className="absolute top-[60%] right-[5%] w-[30%] h-[50%] rounded-full bg-indigo-500 blur-[120px]" />
+      </div>
+
+      {/* Top Navigation Bar */}
+      <nav className="w-full p-6 flex justify-end z-10">
+        <Link
+          href="/signin?type=proctor"
+          className="flex items-center gap-2 px-6 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
+        >
+          <ShieldAlert className="w-5 h-5 text-red-400" />
+          <span className="font-semibold tracking-wide text-red-50">Proctor Login</span>
+        </Link>
       </nav>
 
-      {/* Page Content with Smooth Animations */}
-      <div className="space-y-24 overflow-hidden">
-        {/* Hero Section */}
-        <HeroSection />
-        
-        {/* Features Section */}
-        <section id="features" className="relative">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <FeaturesSection />
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 z-10">
+        <div className="text-center mb-16 space-y-4">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-2xl mb-6 shadow-2xl shadow-blue-500/30">
+            <UserCheck className="w-10 h-10 text-white" />
           </div>
-        </section>
-        
-        {/* Testimonials Section */}
-        <section id="testimonials" className="relative bg-gradient-to-r from-slate-50 to-blue-50 py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <TestimonialsSection />
-          </div>
-        </section>
-        
-        {/* Pricing Section */}
-        <section id="pricing" className="relative">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <PricingSection />
-          </div>
-        </section>
-        
-        {/* How It Works Section */}
-        <section id="how-it-works" className="relative bg-gradient-to-r from-blue-50 to-indigo-50 py-20 rounded-3xl mx-4">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <HowItWorksSection />
-          </div>
-        </section>
-        
-        {/* About Section */}
-        <section id="about" className="relative">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <AboutSection />
-          </div>
-        </section>
-        
-        {/* Contact Section */}
-        <section id="contact" className="relative bg-gradient-to-r from-slate-50 to-blue-50 py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <ContactSection />
-          </div>
-        </section>
+          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-200 to-indigo-100 drop-shadow-sm">
+            Cloud Attendance
+          </h1>
+          <p className="text-xl text-blue-200/80 font-medium max-w-2xl mx-auto">
+            Powered by AWS S3 & Rekognition
+          </p>
+        </div>
+
+        {/* Action Cards */}
+        <div className="flex flex-col md:flex-row gap-8 w-full max-w-4xl justify-center">
+          
+          {/* Card 1: Face Recognition Kiosk */}
+          <Link href="/student/demo-session" className="group flex-1">
+            <div className="h-full relative p-8 bg-gradient-to-br from-blue-600/20 to-indigo-600/20 hover:from-blue-600/30 hover:to-indigo-600/30 backdrop-blur-xl border border-white/10 rounded-3xl transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-blue-500/20 flex flex-col items-center justify-center text-center overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              
+              <div className="w-24 h-24 bg-blue-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500">
+                <UserCheck className="w-12 h-12 text-blue-300" />
+              </div>
+              
+              <h2 className="text-2xl md:text-3xl font-bold mb-4 text-white">
+                Students Face Recognition for Attendance
+              </h2>
+              <p className="text-blue-200/70 text-sm md:text-base">
+                Step up to the Kiosk to automatically mark your attendance for the current timetable subject.
+              </p>
+            </div>
+          </Link>
+
+          {/* Card 2: Student Login */}
+          <Link href="/signin?type=student" className="group flex-1">
+            <div className="h-full relative p-8 bg-gradient-to-br from-emerald-600/20 to-teal-600/20 hover:from-emerald-600/30 hover:to-teal-600/30 backdrop-blur-xl border border-white/10 rounded-3xl transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-emerald-500/20 flex flex-col items-center justify-center text-center overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              
+              <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500">
+                <LogIn className="w-12 h-12 text-emerald-300" />
+              </div>
+              
+              <h2 className="text-2xl md:text-3xl font-bold mb-4 text-white">
+                Student Login
+              </h2>
+              <p className="text-emerald-200/70 text-sm md:text-base">
+                Log in to securely view your cloud attendance records and verify your history.
+              </p>
+            </div>
+          </Link>
+
+        </div>
       </div>
       
-      {/* Modern Footer */}
-      <Footer />
+      {/* Footer */}
+      <div className="p-6 text-center z-10">
+        <p className="text-blue-200/40 text-sm font-medium tracking-wide">
+          VI SEMESTER 'AI & DS' SECURE ATTENDANCE SYSTEM
+        </p>
+      </div>
     </main>
   );
 }

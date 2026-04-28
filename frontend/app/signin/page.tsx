@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { 
   LogIn, 
   Mail, 
@@ -11,19 +11,30 @@ import {
   BookOpen,
   Eye,
   EyeOff,
-  UserPlus
+  UserPlus,
+  ShieldAlert
 } from "lucide-react";
 
 export default function SignInPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const defaultType = searchParams.get("type") || "student";
+  
   const [formData, setFormData] = useState({ 
     email: "", 
     password: "",
-    userType: "student" // Default to student
+    userType: defaultType === "proctor" ? "proctor" : "student"
   });
   const [status, setStatus] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const type = searchParams.get("type");
+    if (type === "proctor" || type === "student") {
+      setFormData(prev => ({ ...prev, userType: type }));
+    }
+  }, [searchParams]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -35,7 +46,7 @@ export default function SignInPage() {
     setStatus("Signing in...");
 
     try {
-      const res = await fetch("http://127.0.0.1:5000/api/signin", {
+      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000') + "/api/signin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -53,27 +64,25 @@ export default function SignInPage() {
         // Store login state and user info in localStorage
         localStorage.setItem("isLoggedIn", "true");
         localStorage.setItem("userEmail", formData.email);
-        localStorage.setItem("userType", formData.userType); // ✅ fixed consistency
+        localStorage.setItem("userType", formData.userType);
         
         if (data.user) {
           localStorage.setItem("username", data.user.username || data.user.name || "");
           localStorage.setItem("userId", data.user._id || "");
 
-          // Store teacher-specific info if applicable
-          if (formData.userType === "teacher" && data.user.employeeId) {
+          if (formData.userType === "proctor" && data.user.employeeId) {
             localStorage.setItem("employeeId", data.user.employeeId);
           }
 
-          // Store student-specific info if applicable  
           if (formData.userType === "student" && data.user.studentId) {
             localStorage.setItem("studentId", data.user.studentId);
           }
         }
 
-        // Redirect to appropriate dashboard based on user type
+        // Redirect to appropriate dashboard
         setTimeout(() => {
-          if (formData.userType === "teacher") {
-            router.push("/teacher/dashboard");
+          if (formData.userType === "proctor") {
+            router.push("/teacher/dashboard"); // We keep teacher/dashboard as Proctor dashboard
           } else {
             router.push("/dashboard");
           }

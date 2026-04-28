@@ -59,7 +59,7 @@ export default function ViewAttendance() {
         params.set("student_id", filterStudentId);
       }
 
-      const res = await fetch(`http://127.0.0.1:5000/api/attendance?${params.toString()}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/attendance?${params.toString()}`);
       const raw = await res.text();
       let data: any;
       try {
@@ -105,7 +105,7 @@ export default function ViewAttendance() {
         params.set("student_id", filterStudentId);
       }
 
-      const res = await fetch(`http://127.0.0.1:5000/api/attendance/export?${params.toString()}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/attendance/export?${params.toString()}`);
       const raw = await res.text();
       let data: any;
       try {

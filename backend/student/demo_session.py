@@ -2,219 +2,79 @@
 from flask import Blueprint, request, jsonify, current_app
 import time
 import base64
-import numpy as np
-from PIL import Image
-import io
-from deepface import DeepFace
-from scipy.spatial.distance import cosine
+import boto3
+import os
 import logging
-import threading
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
 demo_session_bp = Blueprint("demo_session", __name__)
 
-def read_image_from_bytes_optimized(b, target_size=(640, 480)):
-    """Optimized image reading with size constraints"""
-    img = Image.open(io.BytesIO(b)).convert("RGB")
+REK_REGION = "eu-west-1"
+REK_COLLECTION = "attendance_students_collection"
 
-    # Resize large images to reduce processing time
-    if img.width > target_size[0] or img.height > target_size[1]:
-        img.thumbnail(target_size, Image.Resampling.LANCZOS)
-
-    return np.array(img)
-
-def extract_faces_and_embeddings(rgb_image):
-    """Detect and extract embeddings using preloaded DeepFace model"""
-    try:
-        if rgb_image.shape[0] < 40 or rgb_image.shape[1] < 40:
-            return []
-            
-        # Use DeepFace with optimized parameters
-        reps = DeepFace.represent(
-            rgb_image, 
-            model_name="ArcFace", 
-            detector_backend="retinaface",
-            enforce_detection=True,
-            align=True
-        )
-        
-        faces = []
-        for rep in reps:
-            # rep contains 'embedding' and 'facial_area' (x, y, w, h)
-            area = rep.get('facial_area', {})
-            x = area.get('x', 0)
-            y = area.get('y', 0)
-            w = area.get('w', 0)
-            h = area.get('h', 0)
-            
-            embedding = np.array(rep["embedding"], dtype=np.float32)
-            faces.append({
-                "box": (x, y, w, h),
-                "embedding": embedding,
-                "confidence": rep.get("face_confidence", 1.0)
-            })
-        return faces
-        
-    except Exception as e:
-        logger.error(f"Embedding extraction error: {e}")
-        return []
-
-# In-memory cache for student embeddings (optional optimization)
-class EmbeddingCache:
-    def __init__(self):
-        self.student_embeddings = None
-        self.last_update = 0
-        self.cache_duration = 300  # 5 minutes
-        self.lock = threading.Lock()
-
-    def get_embeddings(self, students_col):
-        current_time = time.time()
-
-        # Thread-safe cache check
-        with self.lock:
-            if (self.student_embeddings is None or 
-                current_time - self.last_update > self.cache_duration):
-
-                logger.info("Refreshing embedding cache...")
-
-                # Fetch students with embeddings
-                students = list(students_col.find(
-                    {"embeddings": {"$exists": True, "$ne": None}},
-                    {"studentId": 1, "studentName": 1, "embeddings": 1}
-                ))
-
-                # Process embeddings
-                self.student_embeddings = []
-                for student in students:
-                    embeddings = student.get('embeddings', [])
-                    if embeddings:
-                        # Average multiple embeddings if available
-                        avg_embedding = np.mean(embeddings, axis=0).astype(np.float32)
-                        self.student_embeddings.append({
-                            'embedding': avg_embedding,
-                            'studentId': student.get('studentId'),
-                            'studentName': student.get('studentName')
-                        })
-
-                self.last_update = current_time
-                logger.info(f"Cache refreshed with {len(self.student_embeddings)} students")
-
-        return self.student_embeddings
-
-# Global embedding cache instance
-embedding_cache = EmbeddingCache()
-
-def find_best_match_optimized(query_embedding, students_col, threshold=0.6):
-    """Optimized database search with caching"""
-    cached_embeddings = embedding_cache.get_embeddings(students_col)
-
-    if not cached_embeddings:
-        return None, float('inf')
-
-    best_match = None
-    min_distance = float('inf')
-
-    # Vectorized comparison for speed
-    for student_data in cached_embeddings:
-        stored_embedding = student_data['embedding']
-        distance = cosine(query_embedding, stored_embedding)
-
-        if distance < min_distance:
-            min_distance = distance
-            best_match = student_data
-
-    return best_match if min_distance < threshold else None, min_distance
+rek_client = boto3.client('rekognition', region_name=REK_REGION)
 
 @demo_session_bp.route("/api/demo/recognize", methods=["POST"])
 def demo_recognize_optimized():
-    """OPTIMIZED face recognition endpoint using preloaded models"""
+    """AWS Rekognition demo face recognition endpoint"""
     start_time = time.time()
-
-    # Get model manager from Flask config
-    model_manager = current_app.config.get("MODEL_MANAGER")
-    if not model_manager or not model_manager.is_ready():
-        logger.error("Models not ready")
-        return jsonify({
-            "success": False, 
-            "error": "Face recognition models not initialized"
-        }), 503
 
     data = request.get_json()
     db = current_app.config.get("DB")
     students_col = db.students
-    threshold = float(current_app.config.get("THRESHOLD", "0.6"))
 
     image_b64 = data.get("image", "")
     if image_b64.startswith("data:"):
         image_b64 = image_b64.split(",", 1)[1]
 
     try:
-        # Optimized image processing
-        rgb = read_image_from_bytes_optimized(base64.b64decode(image_b64))
+        image_bytes = base64.b64decode(image_b64)
     except Exception as e:
         logger.error(f"Image processing error: {e}")
         return jsonify({"success": False, "error": "Invalid base64 image"}), 400
 
-    # Face detection with timing
-    detection_start = time.time()
-    faces_data = extract_faces_and_embeddings(rgb)
-    detection_time = time.time() - detection_start
-
-    if len(faces_data) == 0:
-        return jsonify({
-            "success": True, 
-            "faces": [],
-            "processing_time": round(time.time() - start_time, 3),
-            "detection_time": round(detection_time, 3)
-        })
-
     results = []
 
-    # Process each detected face
-    for f in faces_data:
-        embedding_start = time.time()
-        emb = f["embedding"]
-        embedding_time = time.time() - embedding_start
-
-        if emb is None:
+    try:
+        response = rek_client.search_faces_by_image(
+            CollectionId=REK_COLLECTION,
+            Image={'Bytes': image_bytes},
+            MaxFaces=1,
+            FaceMatchThreshold=80.0
+        )
+        
+        face_matches = response.get('FaceMatches', [])
+        
+        if not face_matches:
             results.append({
-                "match": None, 
-                "distance": None, 
-                "box": f["box"],
-                "error": "Failed to extract embedding"
-            })
-            continue
-
-        # Search for best match with timing
-        search_start = time.time()
-        best_match, min_distance = find_best_match_optimized(emb, students_col, threshold)
-        search_time = time.time() - search_start
-
-        if best_match:
-            results.append({
-                "match": {
-                    "user_id": best_match["studentId"], 
-                    "name": best_match["studentName"]
-                },
-                "distance": round(float(min_distance), 4),
-                "confidence": round((1 - min_distance) * 100, 1),
-                "box": f["box"],
-                "timing": {
-                    "embedding": round(embedding_time, 3),
-                    "search": round(search_time, 3)
-                }
+                "match": None,
+                "status": "no_match",
+                "message": "Face not recognized in the system"
             })
         else:
+            match = face_matches[0]
+            student_id = match['Face']['ExternalImageId'].replace("_", " ")
+            confidence = match['Similarity']
+            
+            student_doc = students_col.find_one({"studentId": student_id})
+            student_name = student_doc.get("studentName", "Unknown") if student_doc else "Unknown"
+
             results.append({
-                "match": None, 
-                "distance": round(float(min_distance), 4), 
-                "box": f["box"],
-                "timing": {
-                    "embedding": round(embedding_time, 3),
-                    "search": round(search_time, 3)
-                }
+                "match": {
+                    "user_id": student_id,
+                    "name": student_name
+                },
+                "confidence": round(confidence, 1),
+                "distance": 1.0 - (confidence / 100.0) # Mock distance
             })
+            
+    except rek_client.exceptions.InvalidParameterException:
+        pass # No face detected
+    except Exception as aws_e:
+        logger.error(f"AWS Error: {aws_e}")
+        return jsonify({"success": False, "error": "Cloud recognition failed"}), 500
 
     total_time = time.time() - start_time
 
@@ -222,13 +82,8 @@ def demo_recognize_optimized():
         "success": True, 
         "faces": results, 
         "processing_time": round(total_time, 3),
-        "detailed_timing": {
-            "detection": round(detection_time, 3),
-            "total": round(total_time, 3)
-        },
         "performance_info": {
-            "models_preloaded": True,
-            "cache_enabled": True
+            "backend": "AWS Rekognition"
         }
     })
 
@@ -245,8 +100,11 @@ def create_demo_session():
         "recognitions": []
     }
 
-    result = demo_sessions_col.insert_one(session_data)
-    session_data['_id'] = str(result.inserted_id)
+    try:
+        result = demo_sessions_col.insert_one(session_data)
+        session_data['_id'] = str(result.inserted_id)
+    except Exception as e:
+        logger.error(f"Error creating session: {e}")
 
     return jsonify({
         "success": True,
@@ -267,27 +125,30 @@ def log_recognition(session_id):
         "processing_time": data.get('processing_time')
     }
 
-    demo_sessions_col.update_one(
-        {"session_id": session_id},
-        {"$push": {"recognitions": recognition_log}}
-    )
+    try:
+        demo_sessions_col.update_one(
+            {"session_id": session_id},
+            {"$push": {"recognitions": recognition_log}}
+        )
+    except Exception as e:
+        logger.error(f"Error logging recognition: {e}")
 
     return jsonify({"success": True, "message": "Recognition logged"})
 
 @demo_session_bp.route('/api/demo/models/status', methods=['GET'])
 def model_status():
-    """Check model status endpoint"""
-    model_manager = current_app.config.get("MODEL_MANAGER")
-
-    if not model_manager:
-        return jsonify({
-            "success": False,
-            "error": "Model manager not available"
-        }), 500
+    """Check AWS Rekognition status"""
+    try:
+        # Just describe collection to check connection
+        rek_client.describe_collection(CollectionId=REK_COLLECTION)
+        models_ready = True
+    except Exception as e:
+        logger.error(f"AWS Rekognition connection failed: {e}")
+        models_ready = False
 
     return jsonify({
         "success": True,
-        "models_ready": model_manager.is_ready(),
-        "health_check": model_manager.health_check(),
+        "models_ready": models_ready,
+        "health_check": models_ready,
         "timestamp": time.time()
     })

@@ -11,25 +11,22 @@ import numpy as np
 student_registration_bp = Blueprint("student_registration", __name__)
 logger = logging.getLogger(__name__)
 
-def read_image_from_bytes(b):
-    img = Image.open(io.BytesIO(b)).convert('RGB')
-    return np.array(img)
-def extract_embedding(face_rgb):
+import boto3
+import uuid
+import os
+
+# Initialize AWS clients
+rek_client = boto3.client('rekognition', region_name='eu-west-1')
+s3_client = boto3.client('s3', region_name='eu-north-1')
+REK_COLLECTION = 'attendance_students_collection'
+
+def get_s3_bucket():
     try:
-        # face_rgb is a numpy array. DeepFace can handle numpy arrays directly.
-        rep = DeepFace.represent(
-            face_rgb, 
-            model_name='ArcFace', 
-            detector_backend='retinaface',
-            enforce_detection=True,
-            align=True
-        )
-        if len(rep) > 0:
-            return np.array(rep[0]['embedding'], dtype=float)
-        return None
-    except Exception as e:
-        print(f"Embedding error: {e}")
-        return None
+        with open('s3_bucket_name.txt', 'r') as f:
+            return f.read().strip()
+    except:
+        # Fallback to env var or default if file missing
+        return os.environ.get('S3_BUCKET_NAME', 'attendancesystem-faces-default')
 
 @student_registration_bp.route('/api/register-student', methods=['POST'])
 def register_student():
@@ -37,8 +34,6 @@ def register_student():
     if not data:
         return jsonify({"success": False, "error": "Invalid JSON data"}), 400
 
-    # Get logged-in user info from headers
-    # Simplified: only validate fields and ensure uniqueness of studentId and email
     db = current_app.config.get("DB")
     students_col = db.students
 
@@ -59,20 +54,50 @@ def register_student():
     if not isinstance(images, list) or len(images) != 5:
         return jsonify({"success": False, "error": "Exactly 5 images are required"}), 400
 
-    embeddings = []
+    bucket_name = get_s3_bucket()
+    student_id = data['studentId']
+    
+    # Process images with AWS
+    rekognition_face_ids = []
+    
     for idx, img_b64 in enumerate(images):
         try:
             if img_b64.startswith("data:"):
                 img_b64 = img_b64.split(",", 1)[1]
-            rgb = read_image_from_bytes(base64.b64decode(img_b64))
-        except Exception:
-            return jsonify({"success": False, "error": f"Invalid image data at index {idx}"}), 400
+            image_bytes = base64.b64decode(img_b64)
+            
+            # 1. Upload to S3
+            s3_key = f"students/{student_id}/face_{idx}_{uuid.uuid4().hex[:6]}.jpg"
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=image_bytes,
+                ContentType='image/jpeg'
+            )
+            
+            # 2. Index face in Rekognition
+            # Note: ExternalImageId must be alphanumeric + punctuation, so we use student_id
+            # AWS only indexes the largest face found.
+            response = rek_client.index_faces(
+                CollectionId=REK_COLLECTION,
+                Image={'S3Object': {'Bucket': bucket_name, 'Name': s3_key}},
+                ExternalImageId=student_id.replace(" ", "_"),
+                DetectionAttributes=['DEFAULT'],
+                MaxFaces=1,
+                QualityFilter='AUTO'
+            )
+            
+            for faceRecord in response['FaceRecords']:
+                rekognition_face_ids.append(faceRecord['Face']['FaceId'])
+                
+        except Exception as e:
+            logger.error(f"AWS Error processing image {idx}: {e}")
+            return jsonify({"success": False, "error": f"Cloud processing failed for image {idx+1}: {str(e)}"}), 500
 
-        emb = extract_embedding(rgb)
-        if emb is None:
-            return jsonify({"success": False, "error": f"Failed to extract face features for image {idx+1}"}), 500
-        embeddings.append(emb.tolist())
+    if not rekognition_face_ids:
+        return jsonify({"success": False, "error": "No faces could be recognized by AWS in the provided images."}), 400
 
+    # Save to DynamoDB
     student_data = {
         "studentId": data['studentId'],
         "studentName": data['studentName'],
@@ -83,7 +108,7 @@ def register_student():
         "email": data['email'],
         "phoneNumber": data['phoneNumber'],
         "status": "active",
-        "embeddings": embeddings,
+        "rekognition_face_ids": rekognition_face_ids,
         "face_registered": True,
         "created_at": time.time(),
         "updated_at": time.time()

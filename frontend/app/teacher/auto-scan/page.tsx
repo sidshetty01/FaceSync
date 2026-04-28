@@ -67,7 +67,7 @@ export default function AutoScanKiosk() {
       const base64Image = dataUrl.split(",")[1];
 
       try {
-        const res = await fetch("http://127.0.0.1:5000/api/attendance/auto-mark", {
+        const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000') + "/api/attendance/auto-mark", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ image: base64Image })

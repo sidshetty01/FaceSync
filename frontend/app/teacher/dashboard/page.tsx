@@ -29,7 +29,7 @@ export default function TeacherDashboard() {
         const name = localStorage.getItem("username");
         const empId = localStorage.getItem("employeeId");
 
-        if (!loggedIn || loggedIn !== "true" || userType !== "teacher") {
+        if (!loggedIn || loggedIn !== "true" || userType !== "proctor") {
           setIsLoggedIn(false);
           router.push("/signin");
         } else {
@@ -50,7 +50,7 @@ export default function TeacherDashboard() {
 
   const handleLogout = async () => {
     try {
-      await fetch("http://127.0.0.1:5000/api/logout", {
+      await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000') + "/api/logout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -146,7 +146,7 @@ export default function TeacherDashboard() {
                   <Users className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">Teacher Dashboard</h1>
+                  <h1 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">Proctor Dashboard</h1>
                   <p className="text-slate-600 text-sm font-medium">Welcome back, {teacherName}</p>
                   {employeeId && <p className="text-slate-500 text-xs">ID: {employeeId}</p>}
                 </div>
@@ -203,11 +203,11 @@ export default function TeacherDashboard() {
           <div className="mb-12 text-center">
             <div className="inline-flex items-center gap-3 mb-4">
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              <span className="text-blue-600 font-semibold text-sm uppercase tracking-wider">Teacher Dashboard</span>
+              <span className="text-blue-600 font-semibold text-sm uppercase tracking-wider">Proctor Dashboard</span>
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-800 mb-3 tracking-tight">
-              Teacher Management Hub
+              Proctor Management Hub
             </h2>
             <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed">
               Manage student registrations, conduct sessions, and monitor attendance with advanced face recognition technology

@@ -19,14 +19,12 @@ def api_signup():
     db = current_app.config.get("DB")
     
     # Choose collection based on user type
-    if user_type == 'teacher':
+    if user_type == 'teacher' or user_type == 'proctor':
         auth_col = db.auth_teachers
         # Add additional teacher-specific fields
-        employee_id = data.get('employeeId')
-        department = data.get('department')
+        employee_id = data.get('employeeId', 'PRC-001') # Default for proctor if not provided
+        department = data.get('department', 'Administration')
         
-        if not employee_id:
-            return jsonify({"success": False, "error": "Employee ID required for teachers"}), 400
     else:
         auth_col = db.auth_users
     
@@ -50,11 +48,11 @@ def api_signup():
     }
     
     # Add type-specific fields
-    if user_type == 'teacher':
+    if user_type == 'teacher' or user_type == 'proctor':
         user_doc.update({
             "employeeId": employee_id,
             "department": department,
-            "role": "teacher"
+            "role": "proctor"
         })
     
     auth_col.insert_one(user_doc)
@@ -77,9 +75,9 @@ def api_signin():
     db = current_app.config.get("DB")
     
     # Choose collection based on user type
-    if user_type == 'teacher':
+    if user_type == 'teacher' or user_type == 'proctor':
         auth_col = db.auth_teachers
-        user_role = "teacher"
+        user_role = "proctor"
     else:
         auth_col = db.auth_users
         user_role = "student"

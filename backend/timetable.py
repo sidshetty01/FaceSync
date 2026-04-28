@@ -7,7 +7,7 @@ TIMETABLE = {
         {"start": "08:00", "end": "09:00", "subject": "Open Elective (OE)"},
         {"start": "09:00", "end": "10:00", "subject": "Real Time Big Data Analytics (RTBDA)"},
         {"start": "10:30", "end": "11:30", "subject": "Computer Networks (CN)"},
-        {"start": "14:00", "end": "16:00", "subject": "Soft Skills"}
+        {"start": "14:00", "end": "16:00", "subject": "Soft Skills (D1&D2)"}
     ],
     "Tuesday": [
         {"start": "10:30", "end": "11:30", "subject": "Computer Networks (CN)"},
@@ -21,18 +21,18 @@ TIMETABLE = {
         {"start": "09:00", "end": "10:00", "subject": "DDSM / CC"},
         {"start": "10:30", "end": "11:30", "subject": "Real Time Big Data Analytics (RTBDA)"},
         {"start": "11:30", "end": "12:30", "subject": "Computer Networks (CN)"},
-        {"start": "14:00", "end": "15:00", "subject": "STRIVER"}
+        {"start": "14:00", "end": "17:00", "subject": "STRIVER"}
     ],
     "Thursday": [
         {"start": "08:00", "end": "10:00", "subject": "CN Lab (D1) / IOT Lab (D2)"},
-        {"start": "10:30", "end": "12:30", "subject": "IOT Lab (D1) / RTBDA Lab (D2)"},
-        {"start": "17:15", "end": "18:45", "subject": "NSS / PE / Yoga (NCMC)"}
+        {"start": "14:00", "end": "16:00", "subject": "IOT Lab (D1) / RTBDA Lab (D2)"},
+        {"start": "17:15", "end": "18:45", "subject": "NCMC"}
     ],
     "Friday": [
         {"start": "08:00", "end": "09:00", "subject": "Open Elective (OE)"},
         {"start": "09:00", "end": "10:00", "subject": "DDSM / CC"},
         {"start": "10:30", "end": "12:30", "subject": "CN Lab (D2) / RTBDA Lab (D1)"},
-        {"start": "17:15", "end": "18:45", "subject": "NSS / PE / Yoga (NCMC)"}
+        {"start": "17:15", "end": "18:45", "subject": "NCMC"}
     ],
     "Saturday": [
         {"start": "09:00", "end": "10:00", "subject": "Distributed Data Storage Management (DDSM)"},
