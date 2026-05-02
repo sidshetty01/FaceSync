@@ -2,87 +2,43 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-// XLSX is dynamically imported in the browser-only export function to avoid
-// bundling issues on the server (e.g. "fs" not found). Do not import at module top-level.
-
-interface AttendanceRecord {
-  _id: string;
-  studentId: string;
-  studentName: string;
-  date: string;
-  time: string;
-  status: "present" | "absent";
-  confidence: number;
-}
+import { 
+  ArrowLeft, 
+  BookOpen, 
+  CheckCircle2, 
+  XCircle, 
+  BarChart3,
+  Calendar,
+  GraduationCap
+} from "lucide-react";
 
 export default function ViewAttendance() {
   const router = useRouter();
-  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedDate, setSelectedDate] = useState("");
-  const [filterDepartment, setFilterDepartment] = useState("");
-  const [filterYear, setFilterYear] = useState("");
-  const [filterDivision, setFilterDivision] = useState("");
-  const [filterSubject, setFilterSubject] = useState("");
-  const [filterStudentId, setFilterStudentId] = useState("");
-  const [stats, setStats] = useState({
-    totalStudents: 0,
-    presentToday: 0,
-    absentToday: 0,
-    attendanceRate: 0,
-  });
-  const [searched, setSearched] = useState(false);
-  const [userType, setUserType] = useState("student");
-  const [localStudentId, setLocalStudentId] = useState("");
-  useEffect(() => {
-    setUserType(localStorage.getItem("userType") || "student");
-    setLocalStudentId(localStorage.getItem("studentId") || "");
-  }, []);
+  const [loading, setLoading] = useState(true);
+  const [studentInfo, setStudentInfo] = useState<{name: string, email: string} | null>(null);
+  const [attendanceSummary, setAttendanceSummary] = useState<any>(null);
 
-  const fetchAttendanceData = async () => {
-    if (!selectedDate && !filterDepartment) {
-      alert("Please select at least one filter.");
+  useEffect(() => {
+    const userType = localStorage.getItem("userType");
+    const email = localStorage.getItem("userEmail");
+
+    if (!email || userType !== "student") {
+      router.push("/signin");
       return;
     }
+
+    fetchMyAttendance(email);
+  }, [router]);
+
+  const fetchMyAttendance = async (email: string) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (selectedDate) params.set("date", selectedDate);
-      if (filterDepartment) params.set("department", filterDepartment);
-      if (filterYear) params.set("year", filterYear);
-      if (filterDivision) params.set("division", filterDivision);
-      if (filterSubject) params.set("subject", filterSubject);
-      
-      if (userType === "student") {
-        params.set("student_id", localStudentId);
-      } else if (filterStudentId) {
-        params.set("student_id", filterStudentId);
+      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000') + `/api/student/my-summary/${email}`);
+      const data = await res.json();
+      if (data.success) {
+        setAttendanceSummary(data.attendance);
+        setStudentInfo({ name: data.student_name, email: data.email });
       }
-
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/attendance?${params.toString()}`);
-      const raw = await res.text();
-      let data: any;
-      try {
-        data = JSON.parse(raw);
-      } catch (err) {
-        console.error("Failed to parse /api/attendance response as JSON. status=", res.status, "body=", raw);
-        throw err;
-      }
-
-      if (data && data.success) {
-        const mappedData: AttendanceRecord[] = data.attendance.map((record: any, idx: number) => ({
-          _id: record.studentId || `row-${idx}`,
-          studentId: record.studentId || record.student_id || "-",
-          studentName: record.studentName || record.student_name || "-",
-          date: record.date || data.date || selectedDate,
-          time: record.markedAt || record.time || "-",
-          status: record.status || "present",
-          confidence: record.confidence || 0,
-        }));
-        setAttendanceData(mappedData);
-        setStats(data.stats);
-      }
-      setSearched(true);
     } catch (error) {
       console.error("Error fetching attendance:", error);
     } finally {
@@ -90,256 +46,153 @@ export default function ViewAttendance() {
     }
   };
 
-  const exportExcel = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (selectedDate) params.set("date", selectedDate);
-      if (filterDepartment) params.set("department", filterDepartment);
-      if (filterYear) params.set("year", filterYear);
-      if (filterDivision) params.set("division", filterDivision);
-      if (filterSubject) params.set("subject", filterSubject);
-
-      if (userType === "student") {
-        params.set("student_id", localStudentId);
-      } else if (filterStudentId) {
-        params.set("student_id", filterStudentId);
-      }
-
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/attendance/export?${params.toString()}`);
-      const raw = await res.text();
-      let data: any;
-      try {
-        data = JSON.parse(raw);
-      } catch (err) {
-        console.error("Failed to parse /api/attendance/export response as JSON. status=", res.status, "body=", raw);
-        throw err;
-      }
-      if (data && data.success) {
-        // Dynamic import so bundlers (Next.js SSR) don't try to include node-only deps
-        const XLSX = await import("xlsx");
-        const worksheet = XLSX.utils.json_to_sheet(data.data);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance");
-        XLSX.writeFile(workbook, `attendance_${selectedDate || "export"}.xlsx`);
-      }
-    } catch (error) {
-      console.error("Error exporting excel:", error);
-    }
-  };
-
   return (
-    <main className="min-h-screen bg-gradient-to-br from-orange-50 to-red-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">Attendance Records</h1>
-            <p className="text-gray-600">View and manage student attendance data</p>
-          </div>
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-          >
-            Back to Dashboard
-          </button>
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-          <div className="flex flex-wrap gap-4 items-center justify-between">
-            <div className="flex gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Date</label>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="border border-gray-300 px-3 py-2 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
-                <select
-                  value={filterYear}
-                  onChange={(e) => setFilterYear(e.target.value)}
-                  className="border border-gray-300 px-3 py-2 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Years</option>
-                  <option value="1st Year">1st Year</option>
-                  <option value="2nd Year">2nd Year</option>
-                  <option value="3rd Year">3rd Year</option>
-                  <option value="4th Year">4th Year</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Division</label>
-                <select
-                  value={filterDivision}
-                  onChange={(e) => setFilterDivision(e.target.value)}
-                  className="border border-gray-300 px-3 py-2 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Divisions</option>
-                  <option value="A">A</option>
-                  <option value="B">B</option>
-                  <option value="C">C</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                <input
-                  value={filterSubject}
-                  onChange={(e) => setFilterSubject(e.target.value)}
-                  placeholder="Subject name"
-                  className="border border-gray-300 px-3 py-2 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              {userType === "teacher" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
-                  <input
-                    value={filterStudentId}
-                    onChange={(e) => setFilterStudentId(e.target.value)}
-                    placeholder="Student Id"
-                    className="border border-gray-300 px-3 py-2 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                <select
-                  value={filterDepartment}
-                  onChange={(e) => setFilterDepartment(e.target.value)}
-                  className="border border-gray-300 px-3 py-2 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Departments</option>
-                  <option value="Computer Science">Computer Science</option>
-                  <option value="IT">IT</option>
-                  <option value="Electronics">Electronics</option>
-                  <option value="Mechanical">Mechanical</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-4">
-              <button
-                onClick={fetchAttendanceData}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                🔍 Search
-              </button>
-              <button
-                onClick={exportExcel}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                📑 Export Excel
-              </button>
+    <main className="min-h-screen bg-slate-50">
+      {/* Header Section */}
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => router.push("/dashboard")}
+              className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-slate-800">My Attendance</h1>
+              <p className="text-slate-500 text-sm">Subject-wise presence report</p>
             </div>
           </div>
-        </div>
-
-        {/* Stats */}
-        {attendanceData.length > 0 && (
-          <div className="grid md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-lg shadow-md text-center">
-              <div className="text-3xl font-bold text-blue-600">{stats.totalStudents}</div>
-              <div className="text-sm text-gray-600">Total Students</div>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-md text-center">
-              <div className="text-3xl font-bold text-green-600">{stats.presentToday}</div>
-              <div className="text-sm text-gray-600">Present Today</div>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-md text-center">
-              <div className="text-3xl font-bold text-red-600">{stats.absentToday}</div>
-              <div className="text-sm text-gray-600">Absent Today</div>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-md text-center">
-              <div className="text-3xl font-bold text-purple-600">{stats.attendanceRate}%</div>
-              <div className="text-sm text-gray-600">Attendance Rate</div>
-            </div>
-          </div>
-        )}
-
-        {/* Attendance Table */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800">
-              Attendance {selectedDate ? `for ${new Date(selectedDate).toLocaleDateString()}` : ""}
-            </h3>
-          </div>
-
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p>Loading attendance data...</p>
-            </div>
-          ) : !searched ? (
-            <div className="p-8 text-center text-gray-500">
-              Please apply filters and click <b>Search</b> to view attendance records.
-            </div>
-          ) : attendanceData.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              No attendance records found for the selected filters.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Student ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Time
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Confidence
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {attendanceData.map((record) => (
-                    <tr key={record._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {record.studentId}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {record.studentName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(record.date).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {record.time}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-1 text-xs rounded-full ${
-                            record.status === "present"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {record.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {record.confidence}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          
+          {studentInfo && (
+            <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100">
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
+                {studentInfo.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-bold text-blue-900">{studentInfo.name}</p>
+                <p className="text-[10px] text-blue-600">{studentInfo.email}</p>
+              </div>
             </div>
           )}
         </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-6 py-8">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-slate-500 font-medium">Fetching your attendance records...</p>
+          </div>
+        ) : !attendanceSummary || Object.keys(attendanceSummary).length === 0 ? (
+          <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-sm">
+            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Calendar className="w-10 h-10 text-slate-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">No Records Found</h2>
+            <p className="text-slate-500 max-w-sm mx-auto">
+              You haven't been marked in any sessions yet. Once your attendance is recorded, your subject report will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-6">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
+               {(() => {
+                 const subjects = Object.keys(attendanceSummary);
+                 const totalPresent = subjects.reduce((acc, sub) => acc + attendanceSummary[sub].present, 0);
+                 const totalSessions = subjects.reduce((acc, sub) => acc + attendanceSummary[sub].total, 0);
+                 const overallRate = totalSessions > 0 ? Math.round((totalPresent / totalSessions) * 100) : 0;
+                 
+                 return (
+                   <>
+                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5">
+                      <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl">
+                        <BookOpen className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Subjects</p>
+                        <p className="text-2xl font-bold text-slate-800">{subjects.length}</p>
+                      </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5">
+                      <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl">
+                        <CheckCircle2 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Present</p>
+                        <p className="text-2xl font-bold text-slate-800">{totalPresent} <span className="text-slate-400 text-sm">/ {totalSessions}</span></p>
+                      </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5">
+                      <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl">
+                        <BarChart3 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Overall Rate</p>
+                        <p className="text-2xl font-bold text-slate-800">{overallRate}%</p>
+                      </div>
+                    </div>
+                   </>
+                 )
+               })()}
+            </div>
+
+            {/* Detailed Subject List */}
+            <h2 className="text-lg font-bold text-slate-800 mt-4 flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-blue-600" />
+              Subject-wise Breakdown
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(attendanceSummary).map(([subject, stats]: [string, any]) => {
+                const percentage = stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
+                return (
+                  <div key={subject} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-bold text-slate-800 text-lg">{subject}</h3>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        percentage >= 75 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                      }`}>
+                        {percentage}% Attendance
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Sessions Attended</span>
+                        <span className="font-bold text-slate-800">{stats.present} <span className="text-slate-400 font-normal">of {stats.total}</span></span>
+                      </div>
+                      
+                      <div className="w-full bg-slate-100 rounded-full h-3">
+                        <div 
+                          className={`h-3 rounded-full transition-all duration-1000 ${
+                            percentage >= 75 ? 'bg-emerald-500' : 'bg-rose-500'
+                          }`} 
+                          style={{ width: `${percentage}%` }}
+                        ></div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {percentage < 75 ? (
+                          <div className="flex items-center gap-1.5 text-rose-600 text-[10px] font-bold uppercase">
+                            <XCircle className="w-3 h-3" />
+                            Below Requirement (75%)
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-emerald-600 text-[10px] font-bold uppercase">
+                            <CheckCircle2 className="w-3 h-3" />
+                            On Track
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );

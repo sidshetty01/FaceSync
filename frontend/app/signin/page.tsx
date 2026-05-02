@@ -19,24 +19,14 @@ import { Suspense } from "react";
 
 function SignInForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const defaultType = searchParams.get("type") || "student";
   
   const [formData, setFormData] = useState({ 
     email: "", 
-    password: "",
-    userType: defaultType === "proctor" ? "proctor" : "student"
+    password: ""
   });
   const [status, setStatus] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    const type = searchParams.get("type");
-    if (type === "proctor" || type === "student") {
-      setFormData(prev => ({ ...prev, userType: type }));
-    }
-  }, [searchParams]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -53,8 +43,7 @@ function SignInForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: formData.email,
-          password: formData.password,
-          userType: formData.userType
+          password: formData.password
         }),
       });
 
@@ -66,27 +55,29 @@ function SignInForm() {
         // Store login state and user info in localStorage
         localStorage.setItem("isLoggedIn", "true");
         localStorage.setItem("userEmail", formData.email);
-        localStorage.setItem("userType", formData.userType);
+        localStorage.setItem("userType", data.userType); // Use type from server
         
         if (data.user) {
           localStorage.setItem("username", data.user.username || data.user.name || "");
           localStorage.setItem("userId", data.user._id || "");
+          localStorage.setItem("role", data.user.role || "");
 
-          if (formData.userType === "proctor" && data.user.employeeId) {
+          if (data.userType === "proctor" && data.user.employeeId) {
             localStorage.setItem("employeeId", data.user.employeeId);
           }
 
-          if (formData.userType === "student" && data.user.studentId) {
+          if (data.userType === "student" && data.user.studentId) {
             localStorage.setItem("studentId", data.user.studentId);
           }
         }
 
         // Redirect to appropriate dashboard
         setTimeout(() => {
-          if (formData.userType === "proctor") {
-            router.push("/teacher/dashboard"); // We keep teacher/dashboard as Proctor dashboard
+          if (data.userType === "proctor") {
+            router.push("/teacher/dashboard");
           } else {
-            router.push("/dashboard");
+            // Students go directly to their attendance view
+            router.push("/student/view-attendance");
           }
         }, 1000);
       } else {
@@ -122,40 +113,7 @@ function SignInForm() {
         {/* Sign In Form */}
         <div className="bg-white/80 backdrop-blur-lg rounded-2xl p-6 sm:p-8 border-2 border-slate-200 shadow-xl">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* User Type Selection */}
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-              <label className="block text-slate-700 text-sm font-semibold mb-3 flex items-center gap-2">
-                <User className="w-4 h-4 text-blue-600" />
-                Sign in as:
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, userType: "student" }))}
-                  className={`p-3 rounded-xl border-2 transition-all duration-300 flex items-center justify-center gap-2 text-sm font-semibold hover:scale-105 ${
-                    formData.userType === "student" 
-                      ? "bg-blue-50 border-blue-300 text-blue-700 shadow-lg" 
-                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                  }`}
-                >
-                  <GraduationCap className="w-4 h-4" />
-                  Student
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, userType: "teacher" }))}
-                  className={`p-3 rounded-xl border-2 transition-all duration-300 flex items-center justify-center gap-2 text-sm font-semibold hover:scale-105 ${
-                    formData.userType === "teacher" 
-                      ? "bg-emerald-50 border-emerald-300 text-emerald-700 shadow-lg" 
-                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                  }`}
-                >
-                  <BookOpen className="w-4 h-4" />
-                  Teacher
-                </button>
-              </div>
-            </div>
-
+            
             {/* Email Input */}
             <div>
               <label className="block text-slate-700 text-sm font-semibold mb-2">
@@ -166,7 +124,7 @@ function SignInForm() {
                 <input
                   name="email"
                   type="email"
-                  placeholder={`Enter your ${formData.userType} email`}
+                  placeholder="Enter your email"
                   required
                   value={formData.email}
                   onChange={handleChange}
@@ -205,11 +163,7 @@ function SignInForm() {
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 shadow-lg hover:shadow-xl ${
-                formData.userType === 'teacher' 
-                  ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700' 
-                  : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700'
-              } text-white`}
+              className={`w-full py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 shadow-lg hover:shadow-xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white`}
             >
               {isLoading ? (
                 <>
@@ -219,7 +173,7 @@ function SignInForm() {
               ) : (
                 <>
                   <LogIn className="w-5 h-5" />
-                  Sign In as {formData.userType === 'teacher' ? 'Teacher' : 'Student'}
+                  Sign In
                 </>
               )}
             </button>
@@ -246,7 +200,7 @@ function SignInForm() {
               className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors font-semibold hover:scale-105 transform duration-300"
             >
               <UserPlus className="w-4 h-4" />
-              Create new account
+              Proctor Registration
             </button>
           </div>
         </div>

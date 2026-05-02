@@ -52,6 +52,11 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
     setCameraStatus("stopped");
   };
 
+  const facesDataRef = useRef<FaceData[]>(facesData);
+  useEffect(() => {
+    facesDataRef.current = facesData;
+  }, [facesData]);
+
   const capture = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -64,8 +69,8 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Draw rectangles and IDs
-    facesData.forEach((face) => {
+    // Draw rectangles and IDs from the ref to ensure we have latest data without restarting interval
+    facesDataRef.current.forEach((face) => {
       const [x, y, w, h] = face.box;
       ctx.strokeStyle = face.match ? "lime" : "red";
       ctx.lineWidth = 2;
@@ -101,7 +106,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
         clearInterval(intervalRef.current);
       }
     };
-  }, [captureIntervalMs, isLiveMode, cameraStatus, facesData]);
+  }, [captureIntervalMs, isLiveMode, cameraStatus]);
 
   return (
     <div className="relative w-full max-w-md">

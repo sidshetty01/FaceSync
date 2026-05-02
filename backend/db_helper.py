@@ -55,6 +55,35 @@ class DynamoDBCollection:
     def count_documents(self, query=None):
         return self.table.item_count
 
+    def update_one(self, query, update_data):
+        # Extremely simplified update_one for DynamoDB
+        # Only supports $set and $push for specific use cases here
+        item = self.find_one(query)
+        if not item:
+            return None
+        
+        pk_value = item[self.partition_key]
+        
+        # Handle $set
+        if '$set' in update_data:
+            for k, v in update_data['$set'].items():
+                # Handle nested updates (e.g. students.$.present)
+                if '.' in k:
+                    # This is complex in DynamoDB, so we'll just skip for now or implement minimally
+                    pass
+                else:
+                    item[k] = self._to_decimal(v)
+        
+        # Handle $push
+        if '$push' in update_data:
+            for k, v in update_data['$push'].items():
+                if k not in item:
+                    item[k] = []
+                item[k].append(self._to_decimal(v))
+        
+        self.table.put_item(Item=item)
+        return True
+
     def distinct(self, field):
         response = self.table.scan(ProjectionExpression=field)
         items = response.get('Items', [])

@@ -20,7 +20,7 @@ export default function SignUpPage() {
     username: "",
     email: "",
     password: "",
-    userType: "student"
+    userType: "proctor"
   });
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -78,12 +78,12 @@ export default function SignUpPage() {
               </button>
               
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl shadow-lg">
+                <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-lg">
                   <UserPlus className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Join Us Today</h1>
-                  <p className="text-slate-600 text-sm font-medium">Create your account to get started</p>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Proctor Access</h1>
+                  <p className="text-slate-600 text-sm font-medium">Create a proctor account to manage sessions</p>
                 </div>
               </div>
             </div>
@@ -103,56 +103,28 @@ export default function SignUpPage() {
         <div className="w-full max-w-md">
           {/* Sign Up Form */}
           <div className="bg-white/80 backdrop-blur-lg rounded-2xl p-6 sm:p-8 border-2 border-slate-200 shadow-xl mt-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* User Type Selection */}
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                <label className="block text-slate-700 text-sm font-semibold mb-3 flex items-center gap-2">
-                  <User className="w-4 h-4 text-purple-600" />
-                  Sign up as:
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, userType: "student" }))}
-                    className={`p-3 rounded-xl border-2 transition-all duration-300 flex items-center justify-center gap-2 text-sm font-semibold hover:scale-105 ${
-                      formData.userType === "student" 
-                        ? "bg-blue-50 border-blue-300 text-blue-700 shadow-lg" 
-                        : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                    }`}
-                  >
-                    <GraduationCap className="w-4 h-4" />
-                    Student
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, userType: "teacher" }))}
-                    className={`p-3 rounded-xl border-2 transition-all duration-300 flex items-center justify-center gap-2 text-sm font-semibold hover:scale-105 ${
-                      formData.userType === "teacher" 
-                        ? "bg-emerald-50 border-emerald-300 text-emerald-700 shadow-lg" 
-                        : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                    }`}
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    Teacher
-                  </button>
-                </div>
-              </div>
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+              <p className="text-blue-700 text-sm font-medium">
+                Note: Students cannot register themselves. Accounts are created by proctors during student registration.
+              </p>
+            </div>
 
+            <form onSubmit={handleSubmit} className="space-y-6">
               {/* Username Input */}
               <div>
                 <label className="block text-slate-700 text-sm font-semibold mb-2">
-                  Username
+                  Full Name
                 </label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <input
                     name="username"
                     type="text"
-                    placeholder="Choose a unique username"
+                    placeholder="Enter your full name"
                     required
                     value={formData.username}
                     onChange={handleChange}
-                    className="w-full bg-white border-2 border-slate-200 rounded-xl pl-12 pr-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-300"
+                    className="w-full bg-white border-2 border-slate-200 rounded-xl pl-12 pr-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all duration-300"
                   />
                 </div>
               </div>
@@ -167,11 +139,11 @@ export default function SignUpPage() {
                   <input
                     name="email"
                     type="email"
-                    placeholder="Enter your email address"
+                    placeholder="Enter your proctor email"
                     required
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full bg-white border-2 border-slate-200 rounded-xl pl-12 pr-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-300"
+                    className="w-full bg-white border-2 border-slate-200 rounded-xl pl-12 pr-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all duration-300"
                   />
                 </div>
               </div>
@@ -190,7 +162,7 @@ export default function SignUpPage() {
                     required
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full bg-white border-2 border-slate-200 rounded-xl pl-12 pr-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-300"
+                    className="w-full bg-white border-2 border-slate-200 rounded-xl pl-12 pr-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all duration-300"
                   />
                 </div>
               </div>
@@ -199,11 +171,7 @@ export default function SignUpPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className={`w-full py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 shadow-lg hover:shadow-xl ${
-                  formData.userType === 'teacher' 
-                    ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700' 
-                    : 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700'
-                } text-white`}
+                className={`w-full py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 shadow-lg hover:shadow-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white`}
               >
                 {isLoading ? (
                   <>
@@ -213,7 +181,7 @@ export default function SignUpPage() {
                 ) : (
                   <>
                     <UserPlus className="w-5 h-5" />
-                    Create {formData.userType === 'teacher' ? 'Teacher' : 'Student'} Account
+                    Register as Proctor
                   </>
                 )}
               </button>
@@ -226,7 +194,7 @@ export default function SignUpPage() {
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
                   : status.includes("Error") || status.includes("failed")
                   ? "bg-red-50 text-red-700 border-red-200"
-                  : "bg-purple-50 text-purple-700 border-purple-200"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
               }`}>
                 {status}
               </div>
@@ -236,7 +204,7 @@ export default function SignUpPage() {
             <div className="mt-6 pt-6 border-t border-slate-200 text-center">
               <button
                 onClick={() => router.push("/signin")}
-                className="inline-flex items-center gap-2 text-purple-600 hover:text-purple-800 transition-colors font-semibold hover:scale-105 transform duration-300"
+                className="inline-flex items-center gap-2 text-emerald-600 hover:text-emerald-800 transition-colors font-semibold hover:scale-105 transform duration-300"
               >
                 <LogIn className="w-4 h-4" />
                 Already have an account? Sign in

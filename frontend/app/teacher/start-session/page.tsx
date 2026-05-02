@@ -38,7 +38,7 @@ export default function DemoSessionPage() {
 
     setStatus("Creating session...");
     try {
-      const res = await fetch("http://localhost:5000/api/attendance/create_session", {
+      const res = await fetch("http://16.170.141.196:5000/api/attendance/create_session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -70,7 +70,7 @@ export default function DemoSessionPage() {
       }
 
       try {
-        const res = await fetch("http://localhost:5000/api/attendance/real-mark", {
+        const res = await fetch("http://16.170.141.196:5000/api/attendance/real-mark", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -78,14 +78,24 @@ export default function DemoSessionPage() {
         const data = await res.json();
 
         if (data.faces && data.faces.length > 0) {
-          const face = data.faces[0];
-          if (face.match) {
-            setStatus(`✅ Recognized ${face.match.name}`);
-            setRecognizedStudents((prev) => (prev.includes(face.match.name) ? prev : [...prev, face.match.name]));
+          const recognizedNames: string[] = [];
+          data.faces.forEach((face: any) => {
+            if (face.match) {
+              recognizedNames.push(face.match.name);
+            }
+          });
+
+          if (recognizedNames.length > 0) {
+            setStatus(`✅ Recognized: ${recognizedNames.join(", ")}`);
+            setRecognizedStudents((prev) => {
+              const newOnes = recognizedNames.filter(name => !prev.includes(name));
+              return [...prev, ...newOnes];
+            });
           } else {
-            setStatus("❌ Face not recognized");
+            setStatus("❌ No matches found");
           }
-          setFacesData(data.faces.map((f: FaceData) => ({ box: f.box, match: f.match })));
+          
+          setFacesData(data.faces.map((f: any) => ({ box: f.box, match: f.match })));
         } else {
           setStatus("❌ No faces detected");
           setFacesData([]);

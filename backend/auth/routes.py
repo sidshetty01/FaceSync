@@ -11,24 +11,26 @@ def api_signup():
     username = data.get('username')
     email = data.get('email')
     password = data.get('password')
-    user_type = data.get('userType', 'student')  # Default to student
+    user_type = data.get('userType', 'proctor')  # Default to proctor for signup
+
+    if user_type == 'student':
+        return jsonify({"success": False, "error": "Students cannot sign up themselves. Please contact a Proctor."}), 403
 
     if not all([username, email, password]):
         return jsonify({"success": False, "error": "All fields required"}), 400
 
     db = current_app.config.get("DB")
     
-    # Choose collection based on user type
+    # Choose collection based on user type (only proctor/teacher allowed here)
     if user_type == 'teacher' or user_type == 'proctor':
         auth_col = db.auth_teachers
         # Add additional teacher-specific fields
-        employee_id = data.get('employeeId', 'PRC-001') # Default for proctor if not provided
+        employee_id = data.get('employeeId', f"PRC-{int(time.time()) % 1000:03d}")
         department = data.get('department', 'Administration')
-        
     else:
-        auth_col = db.auth_users
+        return jsonify({"success": False, "error": "Invalid user type for registration"}), 400
     
-    # Check if email already exists in the appropriate collection
+    # Check if email already exists
     if auth_col.find_one({'email': email}):
         return jsonify({
             "success": False, 
@@ -44,22 +46,17 @@ def api_signup():
         "password": hashed_pw,
         "userType": user_type,
         "status": "active",
-        "created_at": time.time()
+        "created_at": time.time(),
+        "employeeId": employee_id,
+        "department": department,
+        "role": "proctor"
     }
-    
-    # Add type-specific fields
-    if user_type == 'teacher' or user_type == 'proctor':
-        user_doc.update({
-            "employeeId": employee_id,
-            "department": department,
-            "role": "proctor"
-        })
     
     auth_col.insert_one(user_doc)
 
     return jsonify({
         "success": True, 
-        "message": f"{user_type.capitalize()} registered successfully"
+        "message": f"Proctor registered successfully"
     })
 
 @auth_bp.route('/api/signin', methods=['POST'])
@@ -67,28 +64,27 @@ def api_signin():
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
-    user_type = data.get('userType', 'student')  # Default to student
 
     if not all([email, password]):
         return jsonify({"success": False, "error": "Email and password required"}), 400
 
     db = current_app.config.get("DB")
     
-    # Choose collection based on user type
-    if user_type == 'teacher' or user_type == 'proctor':
-        auth_col = db.auth_teachers
-        user_role = "proctor"
-    else:
-        auth_col = db.auth_users
-        user_role = "student"
+    # Try to find user in auth_teachers first (Proctor)
+    user = db.auth_teachers.find_one({'email': email})
+    user_type = 'proctor'
+    user_role = 'proctor'
     
-    # Find user in appropriate collection
-    user = auth_col.find_one({'email': email})
+    if not user:
+        # Try to find user in auth_users (Student)
+        user = db.auth_users.find_one({'email': email})
+        user_type = 'student'
+        user_role = 'student'
     
     if not user:
         return jsonify({
             "success": False, 
-            "error": f"No {user_type} account found with this email"
+            "error": "No account found with this email"
         }), 401
     
     # Check password
@@ -105,7 +101,7 @@ def api_signin():
             "error": "Account is deactivated. Contact administrator."
         }), 401
 
-    # Prepare response based on user type
+    # Prepare response based on detected user type
     user_info = {
         "_id": str(user.get('id') or user.get('email') or user.get('username')),
         "username": user['username'],
@@ -115,18 +111,12 @@ def api_signin():
     }
     
     # Add type-specific information
-    if user_type == 'teacher':
+    if user_type == 'proctor':
         user_info.update({
             "employeeId": user.get('employeeId'),
             "department": user.get('department'),
-            "name": user['username']  # Use username as display name for teachers
+            "name": user['username']
         })
-        
-        # Check if teacher has student record too (optional)
-        student_record = db.students.find_one({'email': email})
-        if student_record:
-            user_info['hasStudentRecord'] = True
-            user_info['studentId'] = student_record.get('studentId')
     else:
         # For students, try to get student record
         student_record = db.students.find_one({'email': email})
@@ -142,7 +132,8 @@ def api_signin():
         "success": True, 
         "message": f"Signed in successfully as {user_type}",
         "user": user_info,
-        "userType": user_type
+        "userType": user_type,
+        "role": user_role
     })
 
 @auth_bp.route('/api/logout', methods=['POST'])
@@ -155,20 +146,17 @@ def api_logout():
 def get_user_profile():
     """Get current user's profile information"""
     user_email = request.headers.get('X-User-Email')
-    user_type = request.headers.get('X-User-Type', 'student')
     
     if not user_email:
         return jsonify({"success": False, "error": "Authentication required"}), 401
     
     db = current_app.config.get("DB")
     
-    # Get user from appropriate collection
-    if user_type == 'teacher':
-        auth_col = db.auth_teachers
-    else:
-        auth_col = db.auth_users
-    
-    user = auth_col.find_one({'email': user_email}, {'password': 0})  # Exclude password
+    # Try teachers first
+    user = db.auth_teachers.find_one({'email': user_email}, {'password': 0})
+    if not user:
+        # Then students
+        user = db.auth_users.find_one({'email': user_email}, {'password': 0})
     
     if not user:
         return jsonify({"success": False, "error": "User not found"}), 404

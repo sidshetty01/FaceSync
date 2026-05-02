@@ -73,17 +73,17 @@ def get_attendance():
                 present = False
                 marked_at = None
 
-                attendance_list.append({
-                    "studentId": str(sid) if sid is not None else "",
-                    "studentName": student.get("studentName") or student.get("student_name"),
-                    "date": str(attendance_doc.get("date")) if attendance_doc else str(date),
-                    "subject": str(attendance_doc.get("subject")) if attendance_doc else str(subject),
-                    "department": str(attendance_doc.get("department")) if attendance_doc else str(department),
-                    "year": str(attendance_doc.get("year")) if attendance_doc else str(year),
-                    "division": str(attendance_doc.get("division")) if attendance_doc else str(division),
-                    "status": "present" if present else "absent",
-                    "markedAt": marked_at
-                })
+            attendance_list.append({
+                "studentId": str(sid) if sid is not None else "",
+                "studentName": student.get("studentName") or student.get("student_name"),
+                "date": str(attendance_doc.get("date")) if attendance_doc else str(date),
+                "subject": str(attendance_doc.get("subject")) if attendance_doc else str(subject),
+                "department": str(attendance_doc.get("department")) if attendance_doc else str(department),
+                "year": str(attendance_doc.get("year")) if attendance_doc else str(year),
+                "division": str(attendance_doc.get("division")) if attendance_doc else str(division),
+                "status": "present" if present else "absent",
+                "markedAt": marked_at
+            })
 
         # Also include any session-only students not in roster (fallback)
         if attendance_doc:
@@ -188,5 +188,52 @@ def export_attendance():
 
         return jsonify({"success": True, "data": export_data})
 
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ------------------------- GET MY SUMMARY -------------------------
+@attendance_bp.route('/api/student/my-summary/<email>', methods=['GET'])
+def get_my_summary(email):
+    """Get aggregated attendance for the logged-in student across all subjects"""
+    try:
+        db = current_app.config.get("DB")
+        records_col = db.attendance_records
+        
+        # Find student ID by email first
+        student_doc = db.students.find_one({"email": email})
+        if not student_doc:
+            return jsonify({"success": False, "error": "Student not found"}), 404
+        
+        student_id = student_doc.get("studentId") or student_doc.get("student_id")
+        
+        # Fetch all attendance records
+        all_records = records_col.find()
+        
+        subject_stats = {} # {subject: {present: X, total: Y}}
+        
+        for record in all_records:
+            subject = record.get('subject')
+            if not subject: continue
+            
+            # Check if student is in the 'students' list of the record
+            student_entry = next((s for s in record.get('students', []) if s.get('student_id') == student_id), None)
+            
+            if not student_entry:
+                continue # Student not in this session's roster
+                
+            if subject not in subject_stats:
+                subject_stats[subject] = {"present": 0, "total": 0}
+            
+            subject_stats[subject]["total"] += 1
+            if student_entry.get('present'):
+                subject_stats[subject]["present"] += 1
+        
+        return jsonify({
+            "success": True, 
+            "attendance": subject_stats,
+            "email": email,
+            "student_name": student_doc.get("studentName") or student_doc.get("student_name")
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

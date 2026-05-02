@@ -52,9 +52,9 @@ export default function Navbar() {
                 Dashboard
               </Link>
 
-              {userType === "teacher" && (
+              {userType === "proctor" && (
                 <Link href="/teacher/dashboard" className="hover:text-green-400 transition-colors">
-                  Teacher Panel
+                  Proctor Hub
                 </Link>
               )}
 
@@ -104,7 +104,7 @@ export default function Navbar() {
                 {userType && (
                   <span
                     className={`ml-1 px-2 py-1 text-xs rounded ${
-                      userType === "teacher" ? "bg-green-600" : "bg-blue-600"
+                      userType === "proctor" ? "bg-green-600" : "bg-blue-600"
                     }`}
                   >
                     {userType}

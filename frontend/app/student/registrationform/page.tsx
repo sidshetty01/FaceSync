@@ -44,17 +44,17 @@ export default function StudentRegistrationForm() {
   const [status, setStatus] = useState("");
   const [step, setStep] = useState(1); // 1: Form, 2: Photo Capture
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
-  const [userType, setUserType] = useState<"student" | "teacher">("student");
+  const [userType, setUserType] = useState<"student" | "proctor">("student");
 
   const dashboardPath = useMemo(
-    () => (userType === "teacher" ? "/teacher/dashboard" : "/dashboard"),
+    () => (userType === "proctor" ? "/teacher/dashboard" : "/dashboard"),
     [userType]
   );
 
   useEffect(() => {
     try {
       const loggedIn = localStorage.getItem("isLoggedIn") === "true";
-      const utype = (localStorage.getItem("userType") as "student" | "teacher") || "student";
+      const utype = (localStorage.getItem("userType") as "student" | "proctor") || "student";
       setUserType(utype);
 
       if (!loggedIn) {
@@ -156,12 +156,12 @@ export default function StudentRegistrationForm() {
     return null;
   }
 
-  if (isAuthed === true && userType !== "teacher") {
+  if (isAuthed === true && userType !== "proctor") {
     return (
       <div className="flex items-center justify-center w-full h-screen bg-slate-50">
         <div className="text-center bg-white p-8 rounded-xl shadow-xl border-2 border-red-200">
           <h2 className="text-2xl text-red-600 font-bold mb-4">Access Denied</h2>
-          <p className="text-slate-600 mb-6">Only teachers can register new students.</p>
+          <p className="text-slate-600 mb-6">Only proctors can register new students.</p>
           <button 
             onClick={() => router.push(dashboardPath)}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

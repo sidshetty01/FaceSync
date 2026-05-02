@@ -18,6 +18,7 @@ from student.updatedetails import student_update_bp
 from student.demo_session import demo_session_bp
 from student.view_attendance import attendance_bp
 from teacher.attendance_records import attendance_session_bp
+from teacher.student_management import student_management_bp
 
 # Logging setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -69,6 +70,7 @@ app.register_blueprint(student_update_bp)
 app.register_blueprint(demo_session_bp)
 app.register_blueprint(attendance_bp)
 app.register_blueprint(attendance_session_bp)
+app.register_blueprint(student_management_bp)
 
 # List all registered routes
 logger.info("\nRegistered Flask Routes:")

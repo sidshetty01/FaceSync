@@ -27,10 +27,14 @@ export default function DashboardPage() {
         const loggedIn = localStorage.getItem("isLoggedIn");
         const storedUsername = localStorage.getItem("username");
         const storedEmail = localStorage.getItem("userEmail");
+        const userType = localStorage.getItem("userType");
         
         if (!loggedIn || loggedIn !== "true") {
           setIsLoggedIn(false);
           router.push("/signin");
+        } else if (userType === "proctor") {
+          // If a proctor accidentally lands on the student dashboard, send them to the correct one
+          router.push("/teacher/dashboard");
         } else {
           setIsLoggedIn(true);
           setUsername(storedUsername || "User");
@@ -67,44 +71,14 @@ export default function DashboardPage() {
 
   const studentManagementOptions = [
     {
-      title: "Student Registration",
-      description: "Register new students with complete details and face recognition setup",
-      icon: <Users className="w-7 h-7" />,
-      path: "/student/registrationform",
-      color: "from-blue-500 to-blue-600",
+      title: "View My Attendance",
+      description: "View your personal cloud attendance statistics, subject wise breakdown, and historical reports.",
+      icon: <BarChart3 className="w-7 h-7" />,
+      path: "/student/view-attendance",
+      color: "from-blue-500 to-indigo-600",
       bgColor: "bg-blue-50 hover:bg-blue-100",
       borderColor: "border-blue-200 hover:border-blue-300",
       iconBg: "bg-blue-500"
-    },
-    {
-      title: "Update Student Details",
-      description: "Modify existing student information and profile settings",
-      icon: <Edit3 className="w-7 h-7" />,
-      path: "/student/updatedetails",
-      color: "from-emerald-500 to-emerald-600",
-      bgColor: "bg-emerald-50 hover:bg-emerald-100",
-      borderColor: "border-emerald-200 hover:border-emerald-300",
-      iconBg: "bg-emerald-500"
-    },
-    {
-      title: "Face Recognition Demo",
-      description: "Test and demonstrate live face recognition capabilities",
-      icon: <Camera className="w-7 h-7" />,
-      path: "/student/demo-session",
-      color: "from-purple-500 to-purple-600",
-      bgColor: "bg-purple-50 hover:bg-purple-100",
-      borderColor: "border-purple-200 hover:border-purple-300",
-      iconBg: "bg-purple-500"
-    },
-    {
-      title: "Attendance Records",
-      description: "View comprehensive attendance statistics and reports",
-      icon: <BarChart3 className="w-7 h-7" />,
-      path: "/student/view-attendance",
-      color: "from-amber-500 to-orange-500",
-      bgColor: "bg-amber-50 hover:bg-amber-100",
-      borderColor: "border-amber-200 hover:border-amber-300",
-      iconBg: "bg-amber-500"
     }
   ];
 
@@ -211,10 +185,10 @@ export default function DashboardPage() {
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-800 mb-3 tracking-tight">
-              Student Management Hub
+              Student Portal
             </h2>
             <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed">
-              Streamline student operations with our comprehensive face recognition and attendance management system
+              View your real-time attendance statistics and session history
             </p>
           </div>
 

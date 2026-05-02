@@ -17,7 +17,7 @@ import os
 
 # Initialize AWS clients
 rek_client = boto3.client('rekognition', region_name='eu-west-1')
-s3_client = boto3.client('s3', region_name='eu-north-1')
+s3_client = boto3.client('s3', region_name='eu-west-1')
 REK_COLLECTION = 'attendance_students_collection'
 
 def get_s3_bucket():
@@ -114,8 +114,41 @@ def register_student():
         "updated_at": time.time()
     }
 
+    # Save to Students Collection
     result = students_col.insert_one(student_data)
-    return jsonify({"success": True, "studentId": data['studentId'], "record_id": str(result.inserted_id)})
+    
+    # ALSO: Automatically create an Auth account for the student
+    # Default password is set to their studentId
+    try:
+        from flask_bcrypt import Bcrypt
+        bcrypt = Bcrypt()
+        hashed_pw = bcrypt.generate_password_hash(data['studentId']).decode('utf-8')
+        
+        auth_col = db.auth_users
+        # Check if auth account already exists (to avoid duplicates)
+        if not auth_col.find_one({'email': data['email']}):
+            auth_doc = {
+                "username": data['studentName'],
+                "email": data['email'],
+                "password": hashed_pw,
+                "userType": "student",
+                "studentId": data['studentId'],
+                "status": "active",
+                "created_at": time.time()
+            }
+            auth_col.insert_one(auth_doc)
+            logger.info(f"Automatically created auth account for student: {data['email']}")
+    except Exception as auth_err:
+        logger.error(f"Failed to create auto-auth account: {auth_err}")
+        # We don't fail the whole registration if auth creation fails, 
+        # but we log it.
+
+    return jsonify({
+        "success": True, 
+        "studentId": data['studentId'], 
+        "record_id": str(result.inserted_id),
+        "message": "Student registered successfully. Default password is set to Student ID."
+    })
 
 @student_registration_bp.route('/api/students/count', methods=['GET'])
 def get_student_count():
