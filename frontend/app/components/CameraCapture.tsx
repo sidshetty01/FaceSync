@@ -41,7 +41,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        video: true // Simple constraints for faster startup
       });
       if (videoRef.current) videoRef.current.srcObject = stream;
       setCameraStatus("active");
@@ -123,27 +123,45 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
   }, [captureIntervalMs, isLiveMode, cameraStatus]);
 
   return (
-    <div className="relative w-full max-w-md">
+    <div className="relative w-full max-w-md mx-auto aspect-video bg-black rounded-lg overflow-hidden shadow-2xl">
       <video
         ref={videoRef}
         autoPlay
         muted
         playsInline
-        className={`rounded-lg shadow-md w-full ${cameraStatus === "active" ? "block" : "hidden"}`}
-        style={{ maxHeight: "360px" }}
+        className={`w-full h-full object-cover transform -scale-x-100 ${cameraStatus === "active" ? "block" : "hidden"}`}
       />
-      <canvas ref={canvasRef} className="absolute top-0 left-0 rounded-lg w-full" />
-      {cameraStatus === "stopped" && !cameraError && (
-        <button
-          onClick={startCamera}
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          Start Camera
-        </button>
+      <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none" />
+      
+      {cameraStatus === "loading" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-blue-400 font-medium animate-pulse">Initializing Camera...</p>
+        </div>
       )}
+
+      {cameraStatus === "stopped" && !cameraError && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <button
+            onClick={startCamera}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-bold transition-all shadow-lg hover:scale-105"
+          >
+            Start Camera
+          </button>
+        </div>
+      )}
+      
       {cameraError && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-red-600">
-          {cameraError}
+        <div className="absolute inset-0 flex items-center justify-center p-6 bg-red-900/20 backdrop-blur-sm">
+          <div className="text-center">
+            <p className="text-red-400 font-medium mb-4">{cameraError}</p>
+            <button
+              onClick={startCamera}
+              className="text-white text-sm underline hover:text-red-300"
+            >
+              Try Again
+            </button>
+          </div>
         </div>
       )}
     </div>
