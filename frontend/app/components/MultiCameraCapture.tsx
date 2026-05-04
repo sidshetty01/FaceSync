@@ -24,6 +24,12 @@ const MultiCameraCapture: React.FC<MultiCameraCaptureProps> = ({ onCapture }) =>
       setCameraStatus("loading");
       setCameraError("");
 
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraError("Camera access is blocked because this site is not using HTTPS. Please use localhost or follow the Chrome flag instructions.");
+        setCameraStatus("stopped");
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }
       });
@@ -31,9 +37,15 @@ const MultiCameraCapture: React.FC<MultiCameraCaptureProps> = ({ onCapture }) =>
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       setCameraStatus("active");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error accessing camera:", err);
-      setCameraError("Failed to access camera. Please check permissions.");
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        setCameraError("Camera permission was denied. Please allow camera access in your browser settings.");
+      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+        setCameraError("No camera found on this device.");
+      } else {
+        setCameraError(`Failed to access camera: ${err.message || "Unknown error"}`);
+      }
       setCameraStatus("stopped");
     }
   };

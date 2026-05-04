@@ -24,6 +24,11 @@ export default function AutoScanKiosk() {
   useEffect(() => {
     const startCamera = async () => {
       try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setStatus("Camera access blocked: This site requires HTTPS for camera access.");
+          return;
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }
         });
@@ -31,9 +36,13 @@ export default function AutoScanKiosk() {
           videoRef.current.srcObject = stream;
         }
         setStatus("Camera active. Auto-scanning every 5 seconds.");
-      } catch (err) {
+      } catch (err: any) {
         console.error("Camera error:", err);
-        setStatus("Camera access denied or error.");
+        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+          setStatus("Camera permission denied. Please allow access in browser settings.");
+        } else {
+          setStatus(`Camera error: ${err.message || "Unknown error"}`);
+        }
       }
     };
     startCamera();
