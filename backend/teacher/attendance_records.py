@@ -111,9 +111,11 @@ def mark_attendance():
         recognized_results = []
         doc_changed = False
 
-        for face in face_details:
+        import concurrent.futures
+
+        def process_single_face(face_detail):
             # Crop the face
-            box = face['BoundingBox']
+            box = face_detail['BoundingBox']
             left = width * box['Left']
             top = height * box['Top']
             right = left + (width * box['Width'])
@@ -134,7 +136,6 @@ def mark_attendance():
             face_crop.save(crop_io, format='JPEG')
             crop_bytes = crop_io.getvalue()
 
-            # 2. Search for THIS face
             try:
                 search_response = rek_client.search_faces_by_image(
                     CollectionId=REK_COLLECTION,
@@ -148,10 +149,34 @@ def mark_attendance():
                     match = face_matches[0]
                     student_id = match['Face']['ExternalImageId'].replace("_", " ")
                     confidence = match['Similarity']
-                    
+                    return {"success": True, "student_id": student_id, "confidence": confidence, "box": box}
+                else:
+                    return {"success": True, "student_id": None, "box": box}
+            except Exception as e:
+                logger.error(f"Error searching face: {e}")
+                return {"success": False, "error": str(e), "box": box}
+
+        # 2. Process all faces in parallel
+        recognized_results = []
+        doc_changed = False
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_face = {executor.submit(process_single_face, face): face for face in face_details}
+            for future in concurrent.futures.as_completed(future_to_face):
+                res = future.result()
+                if not res.get("success"):
+                    recognized_results.append({"status": "error", "box": res.get("box")})
+                    continue
+                
+                student_id = res.get("student_id")
+                box = res.get("box")
+                confidence = res.get("confidence")
+
+                if student_id:
                     # Find student name and update record
                     found_in_session = False
                     student_name = "Unknown"
+                    status = "no_match"
 
                     for student in session_doc.get("students", []):
                         if student.get("student_id") == student_id:
@@ -167,7 +192,6 @@ def mark_attendance():
                             break
                     
                     if not found_in_session:
-                        # Student not in preloaded list, check database
                         student_doc = db.students.find_one({"studentId": student_id})
                         if student_doc:
                             student_name = student_doc.get("studentName", "Unknown")
@@ -179,12 +203,10 @@ def mark_attendance():
                             })
                             doc_changed = True
                             status = "marked_present_new"
-                        else:
-                            status = "no_match"
                     
                     recognized_results.append({
                         "match": {"user_id": student_id, "name": student_name},
-                        "confidence": round(confidence, 1),
+                        "confidence": round(confidence, 1) if confidence else 0,
                         "status": status,
                         "box": box
                     })
@@ -193,8 +215,6 @@ def mark_attendance():
                         "status": "no_match",
                         "box": box
                     })
-            except Exception as e:
-                logger.error(f"Error searching cropped face: {e}")
 
         # 3. Save session back to DynamoDB if any changes were made
         if doc_changed:
