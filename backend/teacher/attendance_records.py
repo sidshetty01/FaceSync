@@ -44,22 +44,24 @@ def create_session():
 
     # Prepopulate session with all students in that class
     try:
-        all_students = students_col.find()
+        # Build filter query for DynamoDB
+        query = {}
+        if data.get("department"): query["department"] = data.get("department")
+        if data.get("year"): query["year"] = data.get("year")
+        if data.get("division"): query["division"] = data.get("division")
+
+        all_students = students_col.find(query)
         count = 0
         for s in all_students:
-            if (not data.get("department") or s.get("department") == data.get("department")) and \
-               (not data.get("year") or s.get("year") == data.get("year")) and \
-               (not data.get("division") or s.get("division") == data.get("division")):
-                
-                sid = s.get("studentId") or s.get("student_id")
-                name = s.get("studentName") or s.get("student_name")
-                session_doc["students"].append({
-                    "student_id": sid,
-                    "student_name": name,
-                    "present": False,
-                    "marked_at": None
-                })
-                count += 1
+            sid = s.get("studentId") or s.get("student_id")
+            name = s.get("studentName") or s.get("student_name")
+            session_doc["students"].append({
+                "student_id": sid,
+                "student_name": name,
+                "present": False,
+                "marked_at": None
+            })
+            count += 1
         
         logger.info(f"Created session with {count} students preloaded")
         

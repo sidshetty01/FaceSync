@@ -48,8 +48,20 @@ class DynamoDBCollection:
         return items[0] if items else None
 
     def find(self, query=None):
-        # Returns all items for now, ignoring query for simplicity
-        response = self.table.scan()
+        # Support basic equality filters in scan
+        if not query:
+            response = self.table.scan()
+            return response.get('Items', [])
+        
+        filter_expression = None
+        for k, v in query.items():
+            condition = Attr(k).eq(v)
+            if filter_expression is None:
+                filter_expression = condition
+            else:
+                filter_expression = filter_expression & condition
+        
+        response = self.table.scan(FilterExpression=filter_expression)
         return response.get('Items', [])
 
     def count_documents(self, query=None):
