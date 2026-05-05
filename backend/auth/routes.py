@@ -7,7 +7,7 @@ bcrypt = Bcrypt()
 
 @auth_bp.route('/api/signup', methods=['POST'])
 def api_signup():
-    data = request.get_json()
+    data = request.get_json(force=True, silent=True) or {}
     username = data.get('username')
     email = data.get('email')
     password = data.get('password')
@@ -61,7 +61,7 @@ def api_signup():
 
 @auth_bp.route('/api/signin', methods=['POST'])
 def api_signin():
-    data = request.get_json()
+    data = request.get_json(force=True, silent=True) or {}
     email = data.get('email')
     password = data.get('password')
 
